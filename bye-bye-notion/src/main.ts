@@ -424,7 +424,7 @@ async function scanAndWriteDatabase(
     title,
     resource: ds.url,
     timestamp: ds.lastEditedTime,
-    notion_id: ds.id,
+    notion_id: dbId,
     created_time: ds.createdTime,
     last_edited_time: ds.lastEditedTime,
     notion_parent_type: ds.parentType,
