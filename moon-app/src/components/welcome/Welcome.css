@@ -1,0 +1,159 @@
+.moon-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 80px 32px 48px;
+  gap: 40px;
+  overflow-y: auto;
+  font-family: var(--moon-font-serif, 'Noto Serif', serif);
+  color: var(--moon-fg, #37352f);
+  background: var(--moon-appBg, #fafaf7);
+}
+
+.moon-welcome-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.moon-welcome-title {
+  margin: 0;
+  font-family: var(--moon-font-serif, 'Noto Serif', serif);
+  font-size: 56px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--moon-fg, #37352f);
+}
+
+.moon-welcome-subtitle {
+  margin: 0;
+  font-size: 18px;
+  color: var(--moon-fgSecondary, #4f4e4a);
+}
+
+.moon-welcome-tip {
+  margin: 0;
+  font-size: 13px;
+  color: var(--moon-fgMuted, #9b9a95);
+}
+
+.moon-welcome-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  width: 100%;
+}
+
+.moon-welcome-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  background: var(--moon-sidebarBg, #f1f1ef);
+  border-radius: var(--moon-radii-lg, 8px);
+}
+
+.moon-welcome-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-family: var(--moon-font-sans, 'Inter', sans-serif);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--moon-accent, #2eaadc);
+}
+
+.moon-welcome-card-desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--moon-fgSecondary, #4f4e4a);
+}
+
+.moon-welcome-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.moon-welcome-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-family: var(--moon-font-sans, 'Inter', sans-serif);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--moon-fgMuted, #9b9a95);
+}
+
+.moon-welcome-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 24px;
+}
+
+.moon-welcome-shortcut {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--moon-fgSecondary, #4f4e4a);
+}
+
+.moon-welcome-panes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.moon-welcome-pane {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--moon-fgSecondary, #4f4e4a);
+}
+
+.moon-welcome-pane strong {
+  color: var(--moon-fg, #37352f);
+  font-weight: 600;
+}
+
+.moon-welcome-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.moon-welcome-recent-row {
+  display: flex;
+}
+
+.moon-welcome-recent-row .moon-sidebar-item {
+  width: 100%;
+}
+
+.moon-welcome-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--moon-borderSubtle, #dededa);
+  font-family: var(--moon-font-sans, 'Inter', sans-serif);
+  font-size: 11px;
+  color: var(--moon-fgMuted, #9b9a95);
+  letter-spacing: 0.04em;
+}

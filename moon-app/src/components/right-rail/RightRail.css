@@ -1,0 +1,43 @@
+.moon-right-rail {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--moon-appBg, #fafaf7);
+  border-left: 1px solid var(--moon-borderSubtle, #dededa);
+  flex-shrink: 0;
+  width: 280px;
+  overflow: hidden;
+}
+
+.moon-right-rail-tabs {
+  display: flex;
+  justify-content: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--moon-borderSubtle, #dededa);
+  flex-shrink: 0;
+}
+
+.moon-right-rail-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.moon-right-rail-panel {
+  padding: 12px;
+}
+
+.moon-right-rail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.moon-right-rail-empty {
+  margin: 0;
+  padding: 24px 16px;
+  font-family: var(--moon-font-sans, 'Inter', sans-serif);
+  font-size: 12px;
+  color: var(--moon-fgMuted, #9b9a95);
+  text-align: center;
+}

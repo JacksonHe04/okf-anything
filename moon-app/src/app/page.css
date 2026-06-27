@@ -1,0 +1,80 @@
+.moon-page {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas:
+    'topbar topbar topbar'
+    'left   main   right';
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background: var(--moon-appBg, #fafaf7);
+}
+
+.moon-topbar {
+  grid-area: topbar;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 44px;
+  padding: 0 12px;
+  background: var(--moon-appBg, #fafaf7);
+  border-bottom: 1px solid var(--moon-borderSubtle, #dededa);
+  z-index: 10;
+}
+
+.moon-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.moon-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.moon-topbar-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--moon-font-sans, 'Inter', sans-serif);
+  font-size: 11px;
+  color: var(--moon-fgMuted, #9b9a95);
+}
+
+.moon-topbar-status[data-state='saving'] {
+  color: var(--moon-warning, #d9730d);
+}
+
+.moon-topbar-status[data-state='error'] {
+  color: var(--moon-danger, #e03e3e);
+}
+
+.moon-main {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--moon-appBg, #fafaf7);
+  overflow: hidden;
+}
+
+.moon-editor-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.moon-editor-wrap > * {
+  flex: 1;
+  min-height: 0;
+}
