@@ -12,15 +12,27 @@ type FileTreeProps = {
   rootHandle: FileSystemDirectoryHandle | null;
   currentFilePath: string | null;
   onPickFile: (handle: FileSystemFileHandle, path: string) => void;
-  onRename: (entry: FileEntry, newTitle: string) => Promise<void>;
-  onDelete: (entry: FileEntry) => Promise<void>;
-  onCreateFile: (parent: FileSystemDirectoryHandle, parentName: string) => Promise<void>;
-  onCreateDir: (parent: FileSystemDirectoryHandle) => Promise<void>;
+  onRename: (entry: FileEntry, entryPath: string, newTitle: string) => Promise<string>;
+  onDelete: (entry: FileEntry, entryPath: string, parent: FileSystemDirectoryHandle) => Promise<void>;
+  onCreateFile: (parent: FileSystemDirectoryHandle, parentPath: string, title: string) => Promise<void>;
+  onCreateDir: (parent: FileSystemDirectoryHandle, parentPath: string, title: string) => Promise<void>;
+  onCreateChild: (entry: FileEntry, entryPath: string, title: string) => Promise<void>;
   emptyMessage?: string;
 };
 
 export function FileTree(props: FileTreeProps) {
-  const { topEntries, rootHandle, currentFilePath, onPickFile, onRename, onDelete, onCreateFile, onCreateDir, emptyMessage } = props;
+  const {
+    topEntries,
+    rootHandle,
+    currentFilePath,
+    onPickFile,
+    onRename,
+    onDelete,
+    onCreateFile,
+    onCreateDir,
+    onCreateChild,
+    emptyMessage,
+  } = props;
   if (topEntries === null) {
     return <p className="text-xs text-fgMuted p-6 text-center font-sans">{emptyMessage ?? '尚未选择目录'}</p>;
   }
@@ -41,6 +53,7 @@ export function FileTree(props: FileTreeProps) {
           onDelete={onDelete}
           onCreateFile={onCreateFile}
           onCreateDir={onCreateDir}
+          onCreateChild={onCreateChild}
           activePath={currentFilePath}
         />
       ))}

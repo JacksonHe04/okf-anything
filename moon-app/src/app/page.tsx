@@ -39,12 +39,22 @@ import { MoreHorizontal, FilePlus, FolderPlus, FileText, RefreshCw, Info, Search
 
 import { joinDocument } from '@/lib/markdown-serde';
 import { composeDocument } from '@/lib/frontmatter';
-import { getFileHandleByPath, scanMdFilesRecursively } from '@/lib/fs-access';
+import {
+  deslugify,
+  generateUniqueFilename,
+  getBasename,
+  getDirectoryHandleByPath,
+  getFileHandleByPath,
+  getParentPath,
+  renameEntry,
+  scanMdFilesRecursively,
+  slugify,
+} from '@/lib/fs-access';
 import { pushRecentFile, getRecentFiles } from '@/lib/recent-files';
 import type { FileEntry, Frontmatter } from '@/types/document';
 
 export default function Page() {
-  const { dirHandle, topEntries, status, errorMsg, pickDirectory, reauthorize } = useDirectory();
+  const { dirHandle, topEntries, status, errorMsg, pickDirectory, reauthorize, refreshEntries } = useDirectory();
   const [currentFile, setCurrentFile] = useState<{ handle: FileSystemFileHandle; path: string } | null>(null);
   const [frontmatter, setFrontmatter] = useState<Frontmatter>({});
   const [bodyMd, setBodyMd] = useState('');
@@ -57,6 +67,19 @@ export default function Page() {
   const [allFileTexts, setAllFileTexts] = useState<{ path: string; text: string }[]>([]);
   const [recentPaths, setRecentPaths] = useState<string[]>([]);
   const [workspaceRoot, setWorkspaceRoot] = useState<string | null>(null);
+  const [treeVersion, setTreeVersion] = useState(0);
+
+  const syncPathToHistory = useCallback(
+    (path: string) => {
+      if (workspaceRoot && dirHandle) {
+        const absolutePath = `${workspaceRoot}/${dirHandle.name}/${path}`;
+        window.history.pushState(null, '', `/page${absolutePath}`);
+      } else {
+        window.history.pushState(null, '', `/page/${path}`);
+      }
+    },
+    [dirHandle, workspaceRoot],
+  );
 
   const leftSidebar = useSidebarState('left', false);
   const rightSidebar = useSidebarState('right', false);
@@ -81,19 +104,69 @@ export default function Page() {
     setRecentPaths(getRecentFiles());
 
     // 同步更新 URL 为用户计算机的绝对路径
-    if (workspaceRoot && dirHandle) {
-      const absolutePath = `${workspaceRoot}/${dirHandle.name}/${path}`;
-      window.history.pushState(null, '', `/page${absolutePath}`);
-    } else {
-      window.history.pushState(null, '', `/page/${path}`);
-    }
-  }, [workspaceRoot, dirHandle]);
+    syncPathToHistory(path);
+  }, [syncPathToHistory]);
 
   const fileTree = useFileTree({
     rootHandle: dirHandle,
-    onTreeChange: () => {},
+    onTreeChange: () => {
+      void refreshEntries();
+      setTreeVersion((v) => v + 1);
+    },
     onOpenFile: handlePickFile,
   });
+
+  const handleRenameEntry = useCallback(
+    async (entry: FileEntry, entryPath: string, newTitle: string) => {
+      if (!dirHandle) return entryPath;
+      const renamedPath = await fileTree.rename(entry, entryPath, newTitle);
+      if (!currentFile) return renamedPath;
+
+      let nextOpenPath: string | null = null;
+      if (entry.kind === 'file' && currentFile.path === entryPath) {
+        nextOpenPath = renamedPath;
+      }
+      if (entry.kind === 'dir') {
+        const oldDirPrefix = `${entryPath}/`;
+        const newDirPrefix = `${renamedPath.slice(0, -'/index.md'.length)}/`;
+        if (currentFile.path === `${entryPath}/index.md`) {
+          nextOpenPath = renamedPath;
+        } else if (currentFile.path.startsWith(oldDirPrefix)) {
+          nextOpenPath = currentFile.path.replace(oldDirPrefix, newDirPrefix);
+        }
+      }
+
+      if (nextOpenPath) {
+        const handle = await getFileHandleByPath(dirHandle, nextOpenPath);
+        setCurrentFile({ handle, path: nextOpenPath });
+        pushRecentFile(nextOpenPath);
+        setRecentPaths(getRecentFiles());
+        syncPathToHistory(nextOpenPath);
+      }
+      return renamedPath;
+    },
+    [currentFile, dirHandle, fileTree, syncPathToHistory],
+  );
+
+  const handleDeleteEntry = useCallback(
+    async (entry: FileEntry, entryPath: string, parent: FileSystemDirectoryHandle) => {
+      await fileTree.remove(entry, parent);
+      if (!currentFile) return;
+      const currentPath = currentFile.path;
+      const deletedDocPath = entry.kind === 'dir' ? `${entryPath}/index.md` : entryPath;
+      const deletedPrefix = `${entryPath}/`;
+      if (currentPath === deletedDocPath || (entry.kind === 'dir' && currentPath.startsWith(deletedPrefix))) {
+        setCurrentFile(null);
+        setBodyMd('');
+        setFrontmatter({});
+        setFrontmatterDirty(false);
+        setDirty(false);
+        setOriginalFrontmatterText('');
+        window.history.pushState(null, '', '/');
+      }
+    },
+    [currentFile, fileTree],
+  );
 
   // ─── 监听 URL 变化并自动打开对应文件 ─────────────────────────────
   useEffect(() => {
@@ -141,17 +214,81 @@ export default function Page() {
 
   // ─── 自动保存 ───────────────────────────────────────────
   const saveFile = useCallback(async () => {
-    if (!currentFile) return;
+    if (!currentFile || !dirHandle) return;
+    let targetFile = currentFile;
+    const nextTitle = typeof frontmatter.title === 'string' ? frontmatter.title.trim() : '';
+
+    if (nextTitle) {
+      const desiredSlug = slugify(nextTitle);
+      if (currentFile.path.endsWith('/index.md')) {
+        const dirPath = currentFile.path.slice(0, -'/index.md'.length);
+        const currentDirName = getBasename(dirPath);
+        if (desiredSlug && desiredSlug !== currentDirName) {
+          const parentPath = getParentPath(dirPath);
+          const parentDir = parentPath ? await getDirectoryHandleByPath(dirHandle, parentPath) : dirHandle;
+          const existingNames = new Set<string>();
+          for await (const [name] of parentDir.entries()) {
+            if (name !== currentDirName) existingNames.add(name);
+          }
+          const nextDirName = generateUniqueFilename(desiredSlug, (name) => existingNames.has(name));
+          const dirHandleToRename = await getDirectoryHandleByPath(dirHandle, dirPath);
+          await renameEntry(dirHandleToRename, nextDirName);
+          const renamedDirPath = parentPath ? `${parentPath}/${nextDirName}` : nextDirName;
+          targetFile = {
+            handle: await getFileHandleByPath(dirHandle, `${renamedDirPath}/index.md`),
+            path: `${renamedDirPath}/index.md`,
+          };
+        }
+      } else {
+        const currentName = getBasename(currentFile.path);
+        const desiredFilename = `${desiredSlug}.md`;
+        if (desiredSlug && desiredFilename !== currentName) {
+          const parentPath = getParentPath(currentFile.path);
+          const parentDir = parentPath ? await getDirectoryHandleByPath(dirHandle, parentPath) : dirHandle;
+          const existingNames = new Set<string>();
+          for await (const [name] of parentDir.entries()) {
+            if (name !== currentName) existingNames.add(name);
+          }
+          const nextFilename = generateUniqueFilename(desiredFilename, (name) => existingNames.has(name));
+          await renameEntry(currentFile.handle, nextFilename);
+          targetFile = {
+            handle: await getFileHandleByPath(
+              dirHandle,
+              parentPath ? `${parentPath}/${nextFilename}` : nextFilename,
+            ),
+            path: parentPath ? `${parentPath}/${nextFilename}` : nextFilename,
+          };
+        }
+      }
+    }
+
     // 关键：仅在 frontmatter 被用户编辑（frontmatterDirty）时重新序列化 YAML，
     // 否则保留原始 frontmatter 文本（引号、顺序、注释等不被破坏）。
     const text = frontmatterDirty
       ? joinDocument(frontmatter, bodyMd)
       : composeDocument(originalFrontmatterText, bodyMd);
-    const writable = await currentFile.handle.createWritable();
+    const writable = await targetFile.handle.createWritable();
     await writable.write(text);
     await writable.close();
+    if (targetFile.path !== currentFile.path) {
+      setCurrentFile(targetFile);
+      pushRecentFile(targetFile.path);
+      setRecentPaths(getRecentFiles());
+      syncPathToHistory(targetFile.path);
+    }
+    await refreshEntries();
+    setTreeVersion((v) => v + 1);
     setDirty(false);
-  }, [currentFile, frontmatter, bodyMd, frontmatterDirty, originalFrontmatterText]);
+  }, [
+    bodyMd,
+    currentFile,
+    dirHandle,
+    frontmatter,
+    frontmatterDirty,
+    originalFrontmatterText,
+    refreshEntries,
+    syncPathToHistory,
+  ]);
 
   const autoSave = useAutoSave({ isDirty: dirty, save: saveFile });
 
@@ -178,7 +315,7 @@ export default function Page() {
         console.error('加载所有文件文本失败:', err);
       }
     })();
-  }, [dirHandle, currentFile]);
+  }, [dirHandle, currentFile, treeVersion]);
 
   // ─── 双链跳转 ──────────────────────────────────────────
   useEffect(() => {
@@ -228,6 +365,16 @@ export default function Page() {
 
   const headings = useToc(bodyMd);
   const related = useRelatedDocs(currentFile?.path ?? null, allFileTexts);
+  const documentTitle = useMemo(() => {
+    if (typeof frontmatter.title === 'string' && frontmatter.title.trim()) {
+      return frontmatter.title;
+    }
+    if (!currentFile) return '';
+    if (currentFile.path.endsWith('/index.md')) {
+      return deslugify(getBasename(currentFile.path.slice(0, -'/index.md'.length)));
+    }
+    return deslugify(getBasename(currentFile.path).replace(/\.md$/i, ''));
+  }, [currentFile, frontmatter.title]);
 
   // ─── 快捷键 ─────────────────────────────────────────────
   useEffect(() => {
@@ -309,12 +456,11 @@ export default function Page() {
             rootHandle={dirHandle}
             currentFilePath={currentFile?.path ?? null}
             onPickFile={handlePickFile}
-            onRename={fileTree.rename}
-            onDelete={(entry: FileEntry) =>
-              dirHandle ? fileTree.remove(entry, dirHandle) : Promise.resolve()
-            }
+            onRename={handleRenameEntry}
+            onDelete={handleDeleteEntry}
             onCreateFile={fileTree.createNewFile}
             onCreateDir={fileTree.createNewDir}
+            onCreateChild={fileTree.createChildDocument}
             emptyMessage={status === 'needs-reauth' ? '需要重新授权' : undefined}
           />
         </div>
@@ -406,6 +552,19 @@ export default function Page() {
           <main className="flex-1 min-w-0 flex flex-col bg-appBg overflow-hidden">
             {currentFile ? (
               <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+                <div className="border-b border-borderSubtle bg-appBg px-10 pt-8 pb-5">
+                  <input
+                    value={documentTitle}
+                    onChange={(e) => {
+                      const title = e.target.value;
+                      setFrontmatter((prev) => ({ ...prev, title }));
+                      setFrontmatterDirty(true);
+                      setDirty(true);
+                    }}
+                    className="w-full border-none bg-transparent p-0 text-[2rem] leading-tight font-semibold tracking-normal text-fg outline-none placeholder:text-fgMuted"
+                    placeholder="Untitled"
+                  />
+                </div>
                 <Editor
                   fileHandle={currentFile.handle}
                   filePath={currentFile.path}
@@ -447,11 +606,13 @@ export default function Page() {
                 fileHandle={currentFile.handle}
                 currentPath={currentFile.path}
                 allFileTexts={allFileTexts}
+                frontmatter={frontmatter}
                 onFrontmatterChange={(fm) => {
                   setFrontmatter(fm);
                   // 用户在右侧属性面板修改了字段 → 标记 frontmatter 为 dirty，
                   // 下次保存时用 joinYAML 重新序列化（接受新的引号/顺序）。
                   setFrontmatterDirty(true);
+                  setDirty(true);
                 }}
                 headings={headings}
                 onJumpToHeading={(h) => {
@@ -480,7 +641,7 @@ export default function Page() {
         <PromptDialog
           title="新建文件 (在根目录)"
           onConfirm={async (v) => {
-            await fileTree.createNewFile(dirHandle, v);
+            await fileTree.createNewFile(dirHandle, '', v);
             setCreatingFile(false);
           }}
           onCancel={() => setCreatingFile(false)}
@@ -490,7 +651,7 @@ export default function Page() {
         <PromptDialog
           title="新建文件夹 (在根目录)"
           onConfirm={async (v) => {
-            await fileTree.createNewDir(dirHandle);
+            await fileTree.createNewDir(dirHandle, '', v);
             setCreatingDir(false);
           }}
           onCancel={() => setCreatingDir(false)}

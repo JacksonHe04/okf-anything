@@ -6,6 +6,7 @@ export type FileEntry = {
   name: string;
   path: string;
   handle: FileSystemDirectoryHandle | FileSystemFileHandle;
+  title?: string;
   children?: FileEntry[];
 };
 

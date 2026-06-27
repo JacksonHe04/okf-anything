@@ -4,7 +4,7 @@
  * Welcome — 主区空状态（完全重构为 Tailwind CSS，消除 Welcome.css 依赖）。
  */
 
-import { FileText, Search, PanelLeft, PanelRight, Command, Save, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
+import { FileText, Search, PanelLeft, PanelRight, Command } from 'lucide-react';
 import { Kbd } from '@/design-system/components/primitives/Kbd';
 import { SidebarItem } from '@/design-system/components/composed/SidebarItem';
 
@@ -16,57 +16,25 @@ export interface WelcomeProps {
 
 export function Welcome({ recentPaths, hasWorkspace, onPickRecent }: WelcomeProps) {
   return (
-    <div className="max-w-2xl mx-auto py-16 px-6 flex flex-col gap-10 select-none font-sans text-fg">
-      {/* Hero section */}
-      <div className="text-center flex flex-col gap-2">
-        <h1 className="text-4xl font-extrabold tracking-wider text-accent">MOON</h1>
-        <p className="text-lg text-fgSecondary font-medium">
-          你的知识，已经回到你的硬盘。
-        </p>
-        <p className="text-sm text-fgMuted mt-1 max-w-md mx-auto">
-          {hasWorkspace
-            ? '在左侧选择一个 Markdown 页面开始，或者使用顶栏搜索与全局快捷键。'
-            : '点击左上方"选择工作区"，选择 Notion 数据拉取后存储的本地目录。'}
-        </p>
-      </div>
-
-      {/* Intro cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <section className="p-4 border border-borderSubtle/60 rounded-lg flex flex-col gap-2 bg-sidebarBg/40 hover:bg-sidebarHoverBg/60 transition-colors duration-150">
-          <h2 className="flex items-center gap-1.5 text-sm font-bold text-fg">
-            <ArrowDownToLine size={14} className="text-accent" />
-            ESCAPE
-          </h2>
-          <p className="text-xs text-fgSecondary leading-relaxed">
-            从 Notion / 飞书 / 语雀拉回本地，遵循 Google OKF 标准。
+    <div className="mx-auto flex max-w-3xl flex-col gap-8 px-8 py-14 font-sans text-fg">
+      <section className="rounded-xl border border-borderSubtle/70 bg-paneBg px-6 py-6">
+        <div className="flex flex-col gap-2">
+          <p className="text-xs font-medium uppercase tracking-[0.08em] text-fgMuted">Workspace</p>
+          <h1 className="m-0 text-[2rem] font-semibold leading-tight text-fg">MOON</h1>
+          <p className="m-0 max-w-xl text-sm leading-6 text-fgSecondary">
+            {hasWorkspace
+              ? '从左侧文档树选择页面开始编辑，或使用顶部搜索快速跳转。'
+              : '先选择一个本地工作区。MOON 会直接在你的 Markdown 文档上工作，不做额外同步层。'}
           </p>
-        </section>
-        <section className="p-4 border border-borderSubtle/60 rounded-lg flex flex-col gap-2 bg-sidebarBg/40 hover:bg-sidebarHoverBg/60 transition-colors duration-150">
-          <h2 className="flex items-center gap-1.5 text-sm font-bold text-fg">
-            <FileText size={14} className="text-accent" />
-            MOON
-          </h2>
-          <p className="text-xs text-fgSecondary leading-relaxed">
-            本地 WYSIWYG 编辑器：三栏布局、双链跳转、自适应侧栏。
-          </p>
-        </section>
-        <section className="p-4 border border-borderSubtle/60 rounded-lg flex flex-col gap-2 bg-sidebarBg/40 hover:bg-sidebarHoverBg/60 transition-colors duration-150">
-          <h2 className="flex items-center gap-1.5 text-sm font-bold text-fg">
-            <ArrowUpFromLine size={14} className="text-accent" />
-            SHOT
-          </h2>
-          <p className="text-xs text-fgSecondary leading-relaxed">
-            混合检索、图谱分析与 Agent API — 让本地知识无缝对接 AI。
-          </p>
-        </section>
-      </div>
+        </div>
+      </section>
 
       {/* Shortcuts */}
-      <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-bold text-fg border-b border-borderSubtle/60 pb-1.5 flex items-center gap-1.5">
+      <section className="rounded-xl border border-borderSubtle/70 bg-appBg px-6 py-5">
+        <h2 className="mb-4 flex items-center gap-1.5 border-b border-borderSubtle/60 pb-2 text-sm font-semibold text-fg">
           快捷键
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
           <div className="flex items-center gap-2.5 text-xs text-fgSecondary">
             <Kbd>⌘ K</Kbd>
             <span>全局搜索</span>
@@ -91,27 +59,27 @@ export function Welcome({ recentPaths, hasWorkspace, onPickRecent }: WelcomeProp
       </section>
 
       {/* Panes */}
-      <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-bold text-fg border-b border-borderSubtle/60 pb-1.5">
+      <section className="rounded-xl border border-borderSubtle/70 bg-appBg px-6 py-5">
+        <h2 className="mb-4 border-b border-borderSubtle/60 pb-2 text-sm font-semibold text-fg">
           界面说明
         </h2>
         <div className="flex flex-col gap-3">
           <div className="flex items-start gap-2.5 text-xs text-fgSecondary leading-relaxed">
             <PanelLeft size={14} className="text-fgMuted mt-0.5" />
             <span>
-              <strong>左栏</strong>：本地文档树，支持新建、重命名、删除及拖拽大小。
+              <strong>左栏</strong>：文档树与工作区切换。
             </span>
           </div>
           <div className="flex items-start gap-2.5 text-xs text-fgSecondary leading-relaxed">
             <Command size={14} className="text-fgMuted mt-0.5" />
             <span>
-              <strong>顶栏</strong>：当前页面面包屑路径，支持返回首页或跳出浏览器查看。
+              <strong>顶栏</strong>：面包屑、搜索、保存状态和主题切换。
             </span>
           </div>
           <div className="flex items-start gap-2.5 text-xs text-fgSecondary leading-relaxed">
             <PanelRight size={14} className="text-fgMuted mt-0.5" />
             <span>
-              <strong>右栏</strong>：包含文档的 Frontmatter 属性、大纲目录 (TOC) 与双向反向链接。
+              <strong>右栏</strong>：属性、目录和关联文档。
             </span>
           </div>
         </div>
@@ -119,8 +87,8 @@ export function Welcome({ recentPaths, hasWorkspace, onPickRecent }: WelcomeProp
 
       {/* Recent Files */}
       {recentPaths.length > 0 && (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-bold text-fg border-b border-borderSubtle/60 pb-1.5 flex items-center gap-1.5">
+        <section className="rounded-xl border border-borderSubtle/70 bg-appBg px-6 py-5">
+          <h2 className="mb-4 flex items-center gap-1.5 border-b border-borderSubtle/60 pb-2 text-sm font-semibold text-fg">
             <Search size={14} className="text-fgMuted" />
             最近打开
           </h2>
@@ -137,12 +105,6 @@ export function Welcome({ recentPaths, hasWorkspace, onPickRecent }: WelcomeProp
           </div>
         </section>
       )}
-
-      {/* Footer */}
-      <footer className="mt-8 flex items-center justify-center gap-1.5 text-[10px] text-fgMuted border-t border-borderSubtle/30 pt-6">
-        <Save size={12} />
-        <span>MOON · ESCAPE · SHOT — knowledge, no monthly seat fee.</span>
-      </footer>
     </div>
   );
 }

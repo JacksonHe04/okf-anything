@@ -6,7 +6,6 @@
 
 import { useState, useEffect } from 'react';
 import { FieldCard } from './FieldCard';
-import { splitYAML } from '@/lib/frontmatter';
 import type { Frontmatter } from '@/types/document';
 
 type FieldDef = { type: 'string' | 'text' | 'datetime' | 'list' | 'select' | 'link' | 'readonly'; required?: boolean; options?: string[] };
@@ -29,10 +28,11 @@ type PagePropertiesProps = {
   fileHandle: FileSystemFileHandle | null;
   currentPath: string;
   allFileTexts: { path: string; text: string }[];
+  frontmatter: Frontmatter;
   onFrontmatterChange: (frontmatter: Frontmatter) => void;
 };
 
-export function PageProperties({ fileHandle, currentPath, allFileTexts, onFrontmatterChange }: PagePropertiesProps) {
+export function PageProperties({ fileHandle, currentPath, allFileTexts, frontmatter: externalFrontmatter, onFrontmatterChange }: PagePropertiesProps) {
   const [frontmatter, setFrontmatter] = useState<Frontmatter>({});
   const [extraFields, setExtraFields] = useState<string[]>([]);
   const [hasFrontmatter, setHasFrontmatter] = useState(false);
@@ -44,20 +44,11 @@ export function PageProperties({ fileHandle, currentPath, allFileTexts, onFrontm
       setExtraFields([]);
       return;
     }
-    void (async () => {
-      try {
-        const file = await fileHandle.getFile();
-        const text = await file.text();
-        const { frontmatter: fm } = splitYAML(text);
-        setFrontmatter(fm);
-        setHasFrontmatter(Object.keys(fm).length > 0);
-        const known = new Set(Object.keys(FIELD_DEFS));
-        setExtraFields(Object.keys(fm).filter((k) => !known.has(k)));
-      } catch (err) {
-        console.error('load frontmatter failed:', err);
-      }
-    })();
-  }, [fileHandle]);
+    setFrontmatter(externalFrontmatter);
+    setHasFrontmatter(Object.keys(externalFrontmatter).length > 0);
+    const known = new Set(Object.keys(FIELD_DEFS));
+    setExtraFields(Object.keys(externalFrontmatter).filter((k) => !known.has(k)));
+  }, [externalFrontmatter, fileHandle]);
 
   const updateField = (name: string, value: unknown) => {
     const next = { ...frontmatter, [name]: value };

@@ -21,6 +21,7 @@ export interface RightRailProps {
   fileHandle: FileSystemFileHandle | null;
   currentPath: string;
   allFileTexts: { path: string; text: string }[];
+  frontmatter: Frontmatter;
   onFrontmatterChange: (fm: Frontmatter) => void;
 
   // toc
@@ -36,6 +37,7 @@ export function RightRail({
   fileHandle,
   currentPath,
   allFileTexts,
+  frontmatter,
   onFrontmatterChange,
   headings,
   onJumpToHeading,
@@ -64,6 +66,7 @@ export function RightRail({
               fileHandle={fileHandle}
               currentPath={currentPath}
               allFileTexts={allFileTexts}
+              frontmatter={frontmatter}
               onFrontmatterChange={onFrontmatterChange}
             />
           </div>

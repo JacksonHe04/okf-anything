@@ -15,15 +15,27 @@ type TreeNodeProps = {
   parentPath: string;
   parentHandle: FileSystemDirectoryHandle;
   onPickFile: (handle: FileSystemFileHandle, path: string) => void;
-  onRename: (entry: FileEntry, newTitle: string) => Promise<void>;
-  onDelete: (entry: FileEntry) => Promise<void>;
-  onCreateFile: (parent: FileSystemDirectoryHandle, parentName: string) => Promise<void>;
-  onCreateDir: (parent: FileSystemDirectoryHandle) => Promise<void>;
+  onRename: (entry: FileEntry, entryPath: string, newTitle: string) => Promise<string>;
+  onDelete: (entry: FileEntry, entryPath: string, parent: FileSystemDirectoryHandle) => Promise<void>;
+  onCreateFile: (parent: FileSystemDirectoryHandle, parentPath: string, title: string) => Promise<void>;
+  onCreateDir: (parent: FileSystemDirectoryHandle, parentPath: string, title: string) => Promise<void>;
+  onCreateChild: (entry: FileEntry, entryPath: string, title: string) => Promise<void>;
   activePath: string | null;
 };
 
 export function TreeNode(props: TreeNodeProps) {
-  const { entry, parentPath, parentHandle, onPickFile, onRename, onDelete, onCreateFile, onCreateDir, activePath } = props;
+  const {
+    entry,
+    parentPath,
+    parentHandle,
+    onPickFile,
+    onRename,
+    onDelete,
+    onCreateFile,
+    onCreateDir,
+    onCreateChild,
+    activePath,
+  } = props;
   const [open, setOpen] = useState(false);
   const [kids, setKids] = useState<FileEntry[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -32,6 +44,7 @@ export function TreeNode(props: TreeNodeProps) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [creatingFile, setCreatingFile] = useState(false);
   const [creatingDir, setCreatingDir] = useState(false);
+  const [creatingChild, setCreatingChild] = useState(false);
 
   const path = parentPath ? `${parentPath}/${entry.name}` : entry.name;
 
@@ -66,17 +79,22 @@ export function TreeNode(props: TreeNodeProps) {
 
   if (entry.kind === 'dir') {
     const dirHandle = entry.handle as FileSystemDirectoryHandle;
+    const isDirActive = activePath === `${path}/index.md`;
     return (
       <li className="list-none">
         <div
-          className="flex items-center gap-2 py-1 px-2.5 cursor-pointer rounded transition-colors duration-120 text-[13px] font-sans text-fg hover:bg-sidebarHoverBg font-medium select-none"
+          className={`flex items-center gap-2 py-1 px-2.5 cursor-pointer rounded transition-colors duration-120 text-[13px] font-sans font-medium select-none ${
+            isDirActive
+              ? 'bg-accentMuted text-accent'
+              : 'text-fg hover:bg-sidebarHoverBg'
+          }`}
           onClick={toggle}
           onContextMenu={onContextMenu}
         >
-          <span className="flex-shrink-0 text-accent/80">
+          <span className={`flex-shrink-0 ${isDirActive ? 'text-accent' : 'text-accent/80'}`}>
             {open ? <FolderOpen size={15} /> : <Folder size={15} />}
           </span>
-          <span className="truncate">{entry.name}</span>
+          <span className="truncate">{entry.title ?? entry.name}</span>
         </div>
         {open && kids && (
           <ul className="pl-3.5 list-none border-l border-borderSubtle/60 ml-4 mb-0.5 space-y-0.5">
@@ -91,6 +109,7 @@ export function TreeNode(props: TreeNodeProps) {
                 onDelete={onDelete}
                 onCreateFile={onCreateFile}
                 onCreateDir={onCreateDir}
+                onCreateChild={onCreateChild}
                 activePath={activePath}
               />
             ))}
@@ -112,8 +131,8 @@ export function TreeNode(props: TreeNodeProps) {
         {renaming && (
           <PromptDialog
             title={`重命名 "${entry.name}"`}
-            defaultValue={entry.name}
-            onConfirm={async (v) => { await onRename(entry, v); setRenaming(false); }}
+            defaultValue={entry.title ?? entry.name}
+            onConfirm={async (v) => { await onRename(entry, path, v); setRenaming(false); }}
             onCancel={() => setRenaming(false)}
           />
         )}
@@ -121,21 +140,21 @@ export function TreeNode(props: TreeNodeProps) {
           <ConfirmDialog
             title={`删除 "${entry.name}"?`}
             message="将删除整个文件夹及其所有内容,操作不可撤销。"
-            onConfirm={async () => { await onDelete(entry); setConfirmingDelete(false); }}
+            onConfirm={async () => { await onDelete(entry, path, parentHandle); setConfirmingDelete(false); }}
             onCancel={() => setConfirmingDelete(false)}
           />
         )}
         {creatingFile && (
           <PromptDialog
             title={`在 ${entry.name}/ 新建文件`}
-            onConfirm={async (v) => { await onCreateFile(dirHandle, path); setCreatingFile(false); }}
+            onConfirm={async (v) => { await onCreateFile(dirHandle, path, v); setCreatingFile(false); }}
             onCancel={() => setCreatingFile(false)}
           />
         )}
         {creatingDir && (
           <PromptDialog
             title={`在 ${entry.name}/ 新建文件夹`}
-            onConfirm={async (v) => { await onCreateDir(dirHandle); setCreatingDir(false); }}
+            onConfirm={async (v) => { await onCreateDir(dirHandle, path, v); setCreatingDir(false); }}
             onCancel={() => setCreatingDir(false)}
           />
         )}
@@ -159,13 +178,14 @@ export function TreeNode(props: TreeNodeProps) {
         <span className="flex-shrink-0 text-fgMuted">
           <FileText size={15} className={isActive ? 'text-accent' : 'text-fgMuted'} />
         </span>
-        <span className="truncate">{entry.name}</span>
+        <span className="truncate">{entry.title ?? entry.name.replace(/\.md$/i, '')}</span>
       </div>
       {menu && (
         <ContextMenu
           x={menu.x} y={menu.y}
           onClose={() => setMenu(null)}
           actions={[
+            { label: '新增子文档', onClick: () => setCreatingChild(true) },
             { label: '重命名', onClick: () => setRenaming(true) },
             { label: '删除', onClick: () => setConfirmingDelete(true), danger: true },
           ]}
@@ -174,8 +194,8 @@ export function TreeNode(props: TreeNodeProps) {
       {renaming && (
         <PromptDialog
           title={`重命名 "${entry.name}"`}
-          defaultValue={entry.name.replace(/\.md$/, '')}
-          onConfirm={async (v) => { await onRename(entry, v); setRenaming(false); }}
+          defaultValue={entry.title ?? entry.name.replace(/\.md$/, '')}
+          onConfirm={async (v) => { await onRename(entry, path, v); setRenaming(false); }}
           onCancel={() => setRenaming(false)}
         />
       )}
@@ -183,8 +203,15 @@ export function TreeNode(props: TreeNodeProps) {
         <ConfirmDialog
           title={`删除 "${entry.name}"?`}
           message="操作不可撤销。"
-          onConfirm={async () => { await onDelete(entry); setConfirmingDelete(false); }}
+          onConfirm={async () => { await onDelete(entry, path, parentHandle); setConfirmingDelete(false); }}
           onCancel={() => setConfirmingDelete(false)}
+        />
+      )}
+      {creatingChild && (
+        <PromptDialog
+          title={`在 ${entry.title ?? entry.name} 下新增子文档`}
+          onConfirm={async (v) => { await onCreateChild(entry, path, v); setCreatingChild(false); }}
+          onCancel={() => setCreatingChild(false)}
         />
       )}
     </li>
