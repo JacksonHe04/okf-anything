@@ -44,12 +44,22 @@ Only to find out: **it's easy to go up, but hard to come down.**
 
 ***
 
-**MOON ESCAPE** is a door—opened right from the Moon.
+**MOON ESCAPE** is a door opened from the Moon—but coming home is not a single step.
 
-It streams your entire workspace from Notion / Lark / Yuque to your local machine, \
-writing it as Markdown conforming to **Google OKF (Open Knowledge Format)**, \
-preserving every parent-child relationship, database row, and custom property. \
-Then you can open, edit, and search directly in your browser—no account needed, no client required.
+It is composed of **three core modules** stitched into a single path back to yourself:
+
+| Module | Responsibility | Lives in |
+| --- | --- | --- |
+| **ESCAPE** | Pull trapped content off the cloud, write it as OKF Markdown | `moon-escape/` (`bye-bye-notion`, etc.) |
+| **MOON** | The local "surface" where pulled knowledge lives and gets edited | `moon-app/` |
+| **SHOT** | Make local knowledge useful—retrieval, RAG, Agent API | `moon-shot/` |
+
+**ESCAPE** is the act of leaving—breaking free from the orbits of Notion / Lark / Yuque. \
+**MOON** is the landing—parking the knowledge on your own disk, editing in the browser. \
+**SHOT** is the launch—turning dormant `.md` files into something agents and RAG pipelines can actually consume.
+
+All three modules share one contract: **Google OKF (Open Knowledge Format)**. \
+ESCAPE writes it. MOON edits it. SHOT consumes it.
 
 Your knowledge, no longer subject to a monthly seat fee.
 
@@ -57,90 +67,172 @@ Your knowledge, no longer subject to a monthly seat fee.
 
 ***
 
-## Platform Integration
+## The Three Modules
 
-| Platform | Directory | Status | Notes |
-| --- | --- | --- | --- |
-| **Notion** | [`bye-bye-notion/`](../bye-bye-notion/) | ✅ Available | The only fully implemented platform; 2025 Multi-Data Source, block_id inline page, p-queue rate limiting, budgeted path map are all in place |
-| Lark (飞书) | [`bye-bye-lark/`](../bye-bye-lark/) | 🚧 Initialized | Directory created, code to be implemented |
-| Yuque (语雀) | [`bye-bye-yuque/`](../bye-bye-yuque/) | 🚧 Initialized | Directory created, code to be implemented |
+### 🚀 ESCAPE — Leave the Cloud
 
-The three platforms share the root directory's [`moon-escape/common/`](../moon-escape/common/) — path resolution, filename sanitization, conflict allocation, frontmatter reading/writing are all platform-independent, leaving reuse space for Lark / Yuque.
+`moon-escape/` streams your cloud workspaces to local disk, writing them out as OKF-compliant Markdown. It itself splits into two layers:
+
+- **`moon-escape/common/`** — Cross-platform shared utilities (path resolution, filename sanitization, conflict allocation, frontmatter I/O, error tolerance, counting). Platform-independent.
+- **`bye-bye-<platform>/`** — One implementation per cloud platform:
+
+| Platform | Directory | Status |
+| --- | --- | --- |
+| **Notion** | [`bye-bye-notion/`](../bye-bye-notion/) | ✅ Available |
+| Lark (飞书) | [`bye-bye-lark/`](../bye-bye-lark/) | 🚧 Initialized |
+| Yuque (语雀) | [`bye-bye-yuque/`](../bye-bye-yuque/) | 🚧 Initialized |
+
+Notion is currently the only fully implemented platform—2025 Multi-Data Source, `block_id` inline page, `p-queue` rate limiting, and the Budgeted Path Map are all in place. Lark and Yuque will reuse `common/` when their implementations land.
+
+> **The current repo's `moon-escape/`** hosts the root `bye-bye` package, so `start` / `dry-run` actually run `bye-bye-notion`.
+
+### 🌕 MOON — Local Editor
+
+[`moon-app/`](../moon-app/) is the local OKF Web editor that runs in your browser.
+
+- File System Access API directory selector + IndexedDB handle persistence — pick once, restore automatically
+- Three-pane layout: left file tree / middle Tiptap rich text / right PageProperties
+- 11-field OKF panel (6 OKF + 5 Notion), unknown fields pass through without loss
+- Relative-path double-link navigation (`Cmd/Ctrl + click`) + global search (`Cmd/Ctrl + K`, MiniSearch, Chinese 2-gram + English space tokenization)
+- 5s debounce auto-save + `Cmd/Ctrl+S` for instant save
+- File/folder CRUD with `-1` suffix auto-allocation against collisions
+
+Requires a Chromium-based browser; other browsers will show an `unsupported` state on load.
+
+### 🎯 SHOT — Knowledge Engine / Agent API
+
+[`moon-shot/`](../moon-shot/) is the engine that re-launches local OKF knowledge—making it usable by Agents, RAG pipelines, and retrieval.
+
+Roadmap capabilities:
+
+- **Dense Vector Search (RAG)** — chunk local Markdown, retrieve via semantic embeddings
+- **Sparse Full-Text Search** — MiniSearch keyword recall
+- **Spaces Map & Dependency Graph** — treat relative-path Markdown double-links as graph edges
+- **Agent API Services** — JSON endpoints for keyword/semantic queries, context-ring retrieval, stats, planet-map layouts, summarization
+
+`moon-shot/okf/docs/` also hosts the **Google OKF specification** (`OKF.md` original + `OKF_CN.md` Chinese translation)—OKF is the contract threading all three modules together: ESCAPE writes it, MOON edits it, SHOT consumes it.
 
 ***
 
 ## Project Structure
 
 ```
-moon-escape/
-├── pnpm-workspace.yaml        # pnpm workspaces config (packages: ['.', 'web'])
-├── moon-escape/common/                # Cross-platform shared tools (platform independent)
-│   ├── paths.ts               # Resolve --export-dir / MOON_ESCAPE_EXPORT_DIR / ~/iNon/Wiki/
-│   ├── sanitize.ts            # Filename sanitization (replace invalid characters)
-│   ├── path-allocator.ts      # Conflict suffix allocation (X.md → X-1.md → X-2.md)
-│   ├── frontmatter.ts         # YAML frontmatter read/write
-│   ├── safe-call.ts           # try/catch error tolerance wrapper
-│   └── count-md.ts            # Recursively count .md files
+moon-escape/                            # root (pnpm workspace)
+├── pnpm-workspace.yaml                 # packages: ['.', 'moon-app', 'moon-shot']
+├── package.json                        # bye-bye root pkg: start / dry-run / typecheck / web
 │
-├── bye-bye-notion/            # Notion pull implementation (Core)
+├── moon-escape/                        # ━━━ ESCAPE module ━━━
+│   ├── common/                         #   cross-platform shared tools (platform-independent)
+│   │   ├── paths.ts                    #     --export-dir / MOON_ESCAPE_EXPORT_DIR / ~/iNon/Wiki/
+│   │   ├── sanitize.ts                 #     filename sanitization
+│   │   ├── path-allocator.ts           #     conflict suffix allocation (X.md → X-1.md)
+│   │   ├── frontmatter.ts              #     YAML frontmatter read/write
+│   │   ├── safe-call.ts                #     try/catch error tolerance wrapper
+│   │   └── count-md.ts                 #     recursive .md count
+│   ├── bye-bye-notion/                 #   ✅ Notion puller (core)
+│   │   ├── src/
+│   │   │   ├── main.ts                 #     CLI → searchAll → Budgeted Path Map → stream recursion
+│   │   │   ├── limiter.ts              #     p-queue 3 req/s + 429/5xx backoff retry
+│   │   │   └── notion/                 #     Notion SDK wrappers
+│   │   │       ├── client.ts           #       dotenv + @notionhq/client
+│   │   │       ├── search.ts           #       full searchAll (page + data_source)
+│   │   │       ├── page.ts             #       retrievePage metadata
+│   │   │       ├── database.ts         #       2025 Model: data_source.retrieve + query
+│   │   │       ├── blocks.ts           #       BFS block tree pull (maxDepth=20)
+│   │   │       ├── ancestor.ts         #       block_id → page_id ancestor index
+│   │   │       ├── budget.ts           #       Budgeted Path Map (top-down BFS)
+│   │   │       └── markdown.ts         #       block tree → markdown (mention rewriting)
+│   │   ├── scripts/                    #     one-off diagnostic/validation scripts
+│   │   └── docs/                       #     migration design + Notion API field docs
+│   ├── bye-bye-lark/                   #   🚧 Lark puller (to be implemented)
+│   └── bye-bye-yuque/                  #   🚧 Yuque puller (to be implemented)
+│
+├── moon-app/                           # ━━━ MOON module ━━━
 │   ├── src/
-│   │   ├── main.ts            # Main flow: CLI → searchAll → Budgeted Path Map → stream recursion
-│   │   ├── limiter.ts         # p-queue 3 req/s + 429/5xx backoff retry
-│   │   └── notion/            # Notion SDK wrapper
-│   │       ├── client.ts      # dotenv + @notionhq/client (v2026-03-11)
-│   │       ├── search.ts      # Full searchAll (page + data_source)
-│   │       ├── page.ts        # retrievePage metadata
-│   │       ├── database.ts    # 2025 Model: data_source.retrieve + query
-│   │       ├── blocks.ts      # BFS block tree pull (maxDepth=20)
-│   │       ├── ancestor.ts    # block_id → page_id ancestor index (inline page restoration)
-│   │       ├── budget.ts      # Budgeted Path Map (top-down BFS solving final localPath)
-│   │       └── markdown.ts    # block tree → markdown (includes mention rewriting)
-│   ├── scripts/               # One-off diagnostic/validation scripts (dry-run, validate, verify-*)
-│   └── docs/                  # Migration design + Notion API field docs
+│   │   ├── app/page.tsx                #   three-pane layout (file tree / editor / PageProperties)
+│   │   ├── components/                 #   editor (Tiptap) / file-tree / page-properties / search
+│   │   ├── hooks/                      #   useDirectory / useFileTree / useAutoSave / useSearchIndex
+│   │   └── lib/                        #   fs-access / frontmatter / markdown-serde / double-link / search-index / db
+│   └── docs/                           #   design docs + TODOs
 │
-├── bye-bye-lark/              # Lark pull (To be implemented)
-├── bye-bye-yuque/             # Yuque pull (To be implemented)
+├── moon-shot/                          # ━━━ SHOT module ━━━
+│   ├── src/                            #   knowledge engine + Agent API implementation
+│   ├── okf/                            #   Google OKF spec & tooling
+│   │   ├── docs/                       #     OKF.md original + OKF_CN.md Chinese translation
+│   │   ├── scripts/                    #     OKF validation/conversion scripts
+│   │   └── CLAUDE.md                   #     SHOT-side guidance
+│   └── README.md                       #   module overview (Roadmap + Features)
 │
-├── web/                       # Local OKF Web Editor
-│   ├── src/
-│   │   ├── app/page.tsx       # Three-pane layout (File tree / Editor / PageProperties)
-│   │   ├── components/        # editor (Tiptap) / file-tree / page-properties / search
-│   │   ├── hooks/             # useDirectory / useFileTree / useAutoSave / useSearchIndex
-│   │   └── lib/               # fs-access / frontmatter / markdown-serde / double-link / search-index / db
-│   └── docs/                  # Design docs + TODOs
-│
-├── okf/docs/                  # Google OKF Specification (OKF.md original + OKF_CN.md Chinese translation)
-├── docs/                      # Project documentation
-│   ├── README_EN.md           # English README (More detailed user perspective)
+├── docs/                               # project-level docs
+│   ├── README_EN.md                    #   English README
+│   ├── README_JA.md                    #   Japanese README
+│   ├── README_ZH_TW.md                 #   Traditional Chinese README
 │   └── superpowers/
-│       ├── specs/             # Web Editor v1/v2/v3 design specifications
-│       └── plans/             # Corresponding implementation plans
+│       ├── specs/                      #   Web editor v1/v2/v3 design specs
+│       └── plans/                      #   corresponding implementation plans
 │
-├── AGENTS.md                  # → CLAUDE.md
-└── CLAUDE.md                  # Project Guidelines: Notion field mapping + pull strategy + 3 golden rules
+├── AGENTS.md                           # → CLAUDE.md
+└── CLAUDE.md                           # project guidance: Notion field mapping + pull strategy + 3 golden rules
 ```
+
+***
+
+## Data Flow
+
+```
+                ┌────────────────────────────────────┐
+                │  Notion · Lark · Yuque (the cloud) │
+                └──────────────┬─────────────────────┘
+                               │
+                ┌──────────────▼─────────────────────┐
+   🚀 ESCAPE   │  bye-bye-notion / bye-bye-lark / … │
+   moon-escape │  searchAll → blocks → OKF markdown  │
+                └──────────────┬─────────────────────┘
+                               │  ~/iNon/Wiki/*.md  (YAML frontmatter + parent-child dirs)
+                               │
+                ┌──────────────▼─────────────────────┐
+   🌕 MOON     │  moon-app (Tiptap + FS Access API) │
+   moon-app    │  three panes / 11-field props / search│
+                └──────────────┬─────────────────────┘
+                               │  same local .md files
+                               │
+                ┌──────────────▼─────────────────────┐
+   🎯 SHOT     │  moon-shot (RAG + MiniSearch + …) │
+   moon-shot   │  vector search / keyword recall /   │
+                │  Agent API                          │
+                └────────────────────────────────────┘
+```
+
+All three modules share the same OKF contract: ESCAPE writes, MOON edits, SHOT reads. Edit once, propagate everywhere.
 
 ***
 
 ## Features
 
-### Puller (bye-bye-notion)
+### 🚀 ESCAPE (`moon-escape/`, currently Notion-oriented)
 
-- **Streaming pull with ID idempotency** — Pull and write incrementally, no data lost on network failure/crash; skips already exported subtrees by `notion_id` on rerun.
-- **Full support for Notion 2025 model** — Database containers + multi-data sources, `block_id` parent pages, and flattened custom properties are all mapped to OKF YAML.
-- **Budgeted Path Map** — Even if a child page is not pulled yet, parent pages can write correct relative paths in `## Children` lists during rendering.
-- **Rate limiting + Backoff** — `p-queue` 3 req/s + `Retry-After` parsing + 5xx exponential backoff + jitter.
-- **Output conforms to OKF v0.1** — YAML frontmatter + parent-child directory structure, directly renderable on GitHub, readable by any LLM Agent.
+- **Streaming pull with ID idempotency** — pull and write incrementally; no data lost on network failure/crash; rerun skips already exported subtrees by `notion_id`
+- **Full Notion 2025 model support** — Database containers + multi-data sources, `block_id` parent pages, and flattened custom properties all mapped to OKF YAML
+- **Budgeted Path Map** — even if a child page isn't pulled yet, parent pages can write correct relative paths in `## Children` lists during rendering
+- **Rate limiting + backoff** — `p-queue` 3 req/s + `Retry-After` parsing + 5xx exponential backoff + jitter
+- **Cross-platform reuse layer** — `moon-escape/common/` factors path resolution, sanitization, and frontmatter into a platform-independent layer, ready for Lark / Yuque
 
-### Web Editor (web/)
+### 🌕 MOON (`moon-app/`)
 
-- **File System Access API directory selector + IndexedDB handle persistence** — Select once, restore automatically on subsequent loads; reauth button provided if permission expires.
-- **Three-pane layout** — Left file tree / Middle Tiptap rich text / Right PageProperties.
-- **PageProperties Panel** — `js-yaml` parses the 11 OKF fields (6 OKF + 5 Notion), unknown fields are passed through without loss.
-- **Markdown relative path double-link navigation** — Cmd/Ctrl + click, resolves cross-level paths outside the editor using `getFileHandleByPath`.
-- **Global Search (MiniSearch + Cmd/Ctrl+K)** — Chinese 2-gram + English space tokenization, recursively scans subdirectories.
-- **5s debounce auto-save + status indicator** — Mutex lock prevents concurrent writes, Cmd/Ctrl+S saves immediately.
-- **File/Folder CRUD** — Context menu for creating, renaming, and deleting; `-1` suffix auto-allocation to prevent collisions.
+- **File System Access API directory selector + IndexedDB handle persistence** — pick once, auto-restore; reauth button if permission expires
+- **Three-pane layout** — left file tree / middle Tiptap rich text / right PageProperties
+- **PageProperties panel** — `js-yaml` parses the 11 OKF fields (6 OKF + 5 Notion); unknown fields pass through without loss
+- **Markdown relative-path double-link navigation** — Cmd/Ctrl + click; `getFileHandleByPath` resolves cross-level paths outside the editor
+- **Global Search (MiniSearch + Cmd/Ctrl+K)** — Chinese 2-gram + English space tokenization, recursive subdirectory scan
+- **5s debounce auto-save + status indicator** — mutex prevents concurrent writes; Cmd/Ctrl+S saves immediately
+- **File/Folder CRUD** — context menu for create/rename/delete; `-1` suffix auto-allocation
+
+### 🎯 SHOT (`moon-shot/`, Roadmap)
+
+- **Dense Vector Search (RAG)** — chunk local Markdown, semantic-embedding retrieval
+- **Sparse Full-Text Search** — MiniSearch keyword recall
+- **Spaces Map & Dependency Graph** — relative-path Markdown double-links as graph edges
+- **Agent API Services** — JSON endpoints for keyword/semantic queries, context-ring retrieval, stats, planet-map layouts, summarization
 
 ***
 
@@ -154,15 +246,15 @@ pnpm install
 
 Copy `.env.example` and paste your TOKEN.
 
-### 1. Preview Pull Plan First (Dry-run, no disk writes)
+### 1. Preview the Pull Plan (dry-run, no disk writes) — ESCAPE
 
 ```bash
 pnpm dry-run --root <page-uuid> [--root <page-uuid>...]
 ```
 
-Reads from Notion only, prints the subtree as a markdown list to stdout without writing any files. `<page-uuid>` accepts 32hex / 8-4-4-4-12 / notion.so URL formats.
+Reads from Notion only, prints the subtree as a Markdown list to stdout without writing any files. `<page-uuid>` accepts 32hex / 8-4-4-4-12 / notion.so URL formats.
 
-### 2. Actual Pull (Streaming write to disk)
+### 2. Actually Pull (streaming write to disk) — ESCAPE
 
 ```bash
 pnpm start --root <page-uuid>
@@ -174,16 +266,16 @@ Available scripts (after a single `pnpm install`):
 
 | Command | Action |
 | --- | --- |
-| `pnpm start` | Start Notion streaming pull |
+| `pnpm start` | Start Notion streaming pull (ESCAPE) |
 | `pnpm dry-run` | Read-only preview, no disk writes |
-| `pnpm typecheck` | `tsc --noEmit` (covers src + bye-bye-notion/src + bye-bye-notion/scripts) |
+| `pnpm typecheck` | `tsc --noEmit` (covers src + bye-bye-notion/src + scripts) |
 | `pnpm build` | Compile TypeScript to `dist/` |
-| `pnpm web` | Start Web Editor (`next dev`) |
+| `pnpm web` | Start Web Editor (`moon-app`'s `next dev`, i.e. MOON) |
 | `pnpm web:build` | Build Web Editor production bundle |
 
-Sub-package commands can also be run directly by going into `web/` and running `pnpm dev` / `pnpm test`, pnpm workspaces will automatically hoist dependencies.
+Sub-package commands can also be run directly by going into `moon-app/` and running `pnpm dev` / `pnpm test`, or into `moon-shot/` for its own commands—pnpm workspaces will hoist dependencies automatically.
 
-### 3. Customize Export Directory
+### 3. Customize Export Directory (ESCAPE)
 
 By default, contents are written to `~/iNon/Wiki/` (created automatically on first run). To change the path:
 
@@ -198,29 +290,38 @@ MOON_ESCAPE_EXPORT_DIR=/path/to/wiki pnpm start --root <id>
 pnpm start --root <id> --export-dir '~/Documents/wiki'
 ```
 
-Resolution precedence: `--export-dir` flag → `MOON_ESCAPE_ESCAPE_DIR` environment variable → `~/iNon/Wiki/` default value.
+Resolution precedence: `--export-dir` flag → `MOON_ESCAPE_EXPORT_DIR` environment variable → `~/iNon/Wiki/` default.
 
-> Rerunning `pnpm start` after moving will automatically reuse files based on `notion_id` (won't rewrite existing files).
+> Rerunning `pnpm start` after moving will automatically reuse files based on `notion_id` (no rewrite).
 
-### 4. Edit in Browser
+### 4. Edit in the Browser — MOON
 
 ```bash
 pnpm web
 # Open http://localhost:3000/
 ```
 
-Select `~/iNon/Wiki/` directory → Grant read/write permissions → Left file tree → Middle Tiptap rich text → Right PageProperties (11 fields card) → `Cmd/Ctrl+S` to save immediately / auto-saves after 5 seconds / `Cmd/Ctrl+K` for global search.
+Select `~/iNon/Wiki/` directory → Grant read/write permissions → Left file tree → Middle Tiptap rich text → Right PageProperties (11 fields card) → `Cmd/Ctrl+S` saves immediately / auto-saves after 5 seconds / `Cmd/Ctrl+K` opens global search.
 
 Requires a Chromium-based browser (File System Access API); other browsers will report an `unsupported` status upon loading.
+
+### 5. Expose Local Knowledge to Agents — SHOT
+
+SHOT is currently on the Roadmap; once `moon-shot/src/` lands:
+
+```bash
+pnpm --filter moon-shot dev   # boot the knowledge engine / Agent API
+```
 
 ***
 
 ## Further Reading
 
-### Design and Specifications
+### Design & Specifications
 
-- **OKF Specification** —— [`okf/docs/OKF_CN.md`](../okf/docs/OKF_CN.md) (Chinese translation, sourced from Google Cloud Blog 2026-06)
-- **Notion Field Mapping** —— [`bye-bye-notion/docs/`](../bye-bye-notion/docs/) (PAGE / DATABASE / PAGE_PROPERTIES / NOTION_PAT)
+- **OKF Specification** — [`moon-shot/okf/docs/OKF_CN.md`](../moon-shot/okf/docs/OKF_CN.md) (Chinese translation, sourced from Google Cloud Blog 2026-06). The contract threading ESCAPE / MOON / SHOT together.
+- **Notion Field Mapping** — [`bye-bye-notion/docs/`](../bye-bye-notion/docs/) (PAGE / DATABASE / PAGE_PROPERTIES / NOTION_PAT)
+- **SHOT Module Notes** — [`moon-shot/README.md`](../moon-shot/README.md)
 
 ### References
 
@@ -234,15 +335,18 @@ Requires a Chromium-based browser (File System Access API); other browsers will 
 ## Code Check & Testing
 
 ```bash
-# Root directory TypeScript check (covers src + bye-bye-notion/src + bye-bye-notion/scripts)
+# Root TypeScript check (covers src + bye-bye-notion/src + bye-bye-notion/scripts)
 pnpm typecheck
 
-# Web Editor unit tests (vitest + happy-dom + fake-indexeddb)
-pnpm --filter web test
+# MOON editor unit tests (vitest + happy-dom + fake-indexeddb)
+pnpm --filter moon-app test
 
-# One-off diagnostics (Notion side, tsx is already in devDeps)
-pnpm exec tsx bye-bye-notion/scripts/validate.ts          # Compares 4 root subtrees vs local .md
-pnpm exec tsx bye-bye-notion/scripts/verify-ids.ts        # Verifies notion_id for each .md file
+# SHOT module commands (added as the Roadmap lands)
+pnpm --filter moon-shot test
+
+# One-off diagnostics (ESCAPE / Notion side, tsx is in devDeps)
+pnpm exec tsx bye-bye-notion/scripts/validate.ts             # Compares 4 root subtrees vs local .md
+pnpm exec tsx bye-bye-notion/scripts/verify-ids.ts           # Verifies notion_id for each .md
 pnpm exec tsx bye-bye-notion/scripts/verify-ancestor-index.mts  # Verifies inline page restoration
 ```
 
@@ -252,8 +356,9 @@ pnpm exec tsx bye-bye-notion/scripts/verify-ancestor-index.mts  # Verifies inlin
 
 The project uses **pnpm workspaces** to manage the monorepo:
 
-- The root `pnpm-workspace.yaml` declares `packages: ['.', 'web']`
-- Shares the root `pnpm-lock.yaml`, deduplicating dependencies and speeding up installation
+- Root `pnpm-workspace.yaml` declares `packages: ['.', 'moon-app', 'moon-shot']`
+- Three modules are independent packages: ESCAPE in the root package, MOON in `moon-app/`, SHOT in `moon-shot/`
+- Shared root `pnpm-lock.yaml`, deduplicating dependencies and speeding up installation
 - Sub-package commands can be run uniformly using `pnpm --filter <pkg> <cmd>` or directly inside the sub-package directory
 - `.pnpm-store/` (if using global store) has been excluded in `.gitignore`
 
