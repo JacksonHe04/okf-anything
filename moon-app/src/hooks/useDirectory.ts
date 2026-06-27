@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { loadDirHandle, saveDirHandle, clearDirHandle } from '@/lib/db';
 import { readDirectoryEntries } from '@/lib/fs-access';
 import type { FileEntry } from '@/types/document';
@@ -13,6 +13,14 @@ export function useDirectory() {
   const [topEntries, setTopEntries] = useState<FileEntry[] | null>(null);
   const [status, setStatus] = useState<DirectoryStatus>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const pickInFlightRef = useRef(false);
+
+  const refreshEntries = useCallback(async () => {
+    if (!dirHandle) return null;
+    const entries = await readDirectoryEntries(dirHandle);
+    setTopEntries(entries);
+    return entries;
+  }, [dirHandle]);
 
   // 浏览器支持检查
   useEffect(() => {
@@ -57,6 +65,8 @@ export function useDirectory() {
    *    （罕见，例如 picker 本身被外部中断），就直接放弃并提示用户重试。
    */
   const pickDirectory = useCallback(async () => {
+    if (pickInFlightRef.current) return;
+    pickInFlightRef.current = true;
     setErrorMsg(null);
     try {
       // 1. 弹出系统文件夹选择器；用户在 OS 层确认后，handle 已经带 readwrite granted
@@ -86,8 +96,13 @@ export function useDirectory() {
       await saveDirHandle(handle);
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return; // 用户取消，忽略
+      if (err instanceof Error && err.name === 'NotAllowedError' && err.message.includes('File picker already active')) {
+        return;
+      }
       console.error('[useDirectory] pickDirectory error:', err);
       setErrorMsg(`选择目录失败: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      pickInFlightRef.current = false;
     }
   }, []);
 
@@ -123,5 +138,6 @@ export function useDirectory() {
     errorMsg,
     pickDirectory,
     reauthorize,
+    refreshEntries,
   };
 }
