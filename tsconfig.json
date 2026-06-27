@@ -15,7 +15,7 @@
     "sourceMap": true
   },
   "include": [
-    "src/**/*",
+    "moon-escape/**/*",
     "bye-bye-notion/src/**/*",
     "bye-bye-notion/scripts/**/*"
   ],

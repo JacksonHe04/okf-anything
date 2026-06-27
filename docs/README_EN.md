@@ -65,7 +65,7 @@ Your knowledge, no longer subject to a monthly seat fee.
 | Lark (飞书) | [`bye-bye-lark/`](../bye-bye-lark/) | 🚧 Initialized | Directory created, code to be implemented |
 | Yuque (语雀) | [`bye-bye-yuque/`](../bye-bye-yuque/) | 🚧 Initialized | Directory created, code to be implemented |
 
-The three platforms share the root directory's [`src/common/`](../src/common/) — path resolution, filename sanitization, conflict allocation, frontmatter reading/writing are all platform-independent, leaving reuse space for Lark / Yuque.
+The three platforms share the root directory's [`moon-escape/common/`](../moon-escape/common/) — path resolution, filename sanitization, conflict allocation, frontmatter reading/writing are all platform-independent, leaving reuse space for Lark / Yuque.
 
 ***
 
@@ -74,7 +74,7 @@ The three platforms share the root directory's [`src/common/`](../src/common/) �
 ```
 moon-escape/
 ├── pnpm-workspace.yaml        # pnpm workspaces config (packages: ['.', 'web'])
-├── src/common/                # Cross-platform shared tools (platform independent)
+├── moon-escape/common/                # Cross-platform shared tools (platform independent)
 │   ├── paths.ts               # Resolve --export-dir / MOON_ESCAPE_EXPORT_DIR / ~/iNon/Wiki/
 │   ├── sanitize.ts            # Filename sanitization (replace invalid characters)
 │   ├── path-allocator.ts      # Conflict suffix allocation (X.md → X-1.md → X-2.md)

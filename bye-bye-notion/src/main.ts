@@ -11,7 +11,7 @@ import {
   countMdFiles,
   DEFAULT_EXPORT_DIR,
   EXPORT_DIR_HELP,
-} from "../../src/common/index.js";
+} from "../../moon-escape/common/index.js";
 import { createNotionClient } from "./notion/client.js";
 import { NotionLimiter } from "./limiter.js";
 import { retrievePage } from "./notion/page.js";

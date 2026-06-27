@@ -18,8 +18,8 @@
  *      走 scanAndWriteDatabase 路径, 不需要预算 localPath)
  */
 import type { SearchHit } from "./search.js";
-import { sanitizeFileName } from "../../../src/common/sanitize.js";
-import type { PathAllocator } from "../../../src/common/path-allocator.js";
+import { sanitizeFileName } from "../../../moon-escape/common/sanitize.js";
+import type { PathAllocator } from "../../../moon-escape/common/path-allocator.js";
 import * as path from "path";
 
 /** notion_id → 相对 exportRootDir 的 localPath */
