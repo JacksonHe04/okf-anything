@@ -1,12 +1,10 @@
 'use client';
 
 /**
- * Sidebar — 可折叠 + 可拖拽的侧栏容器（完全重构为 Tailwind CSS，并支持边缘悬停弹出）。
- * 用法：左栏、右栏共用，区别只在 side prop 和内部布局。
- *
- * collapsed 状态由父组件控制（用 useSidebarState）。
- * 折叠后宽度为 0px，但光标移到页面边缘 8px 范围内时会临时“弹出”(Peek)。
- * 展开时可拖拽边缘调整宽度（defaultWidth 为初始宽度）。
+ * Sidebar — 可折叠 + 可拖拽的侧栏容器
+ * - 支持边缘悬停弹出 (Peek)
+ * - 拖拽无延迟，正常拖拽
+ * - Peek 状态下支持右键菜单
  */
 
 import { useCallback, useRef, useState, type ReactNode } from 'react';
@@ -39,6 +37,7 @@ export function Sidebar({
   const isDragging = useRef(false);
   const startX = useRef(0);
   const startWidth = useRef(0);
+  const leaveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const onMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -94,26 +93,44 @@ export function Sidebar({
       : 'opacity-0 pointer-events-none',
   ].filter(Boolean).join(' ');
 
+  // 处理鼠标离开：使用延迟关闭 Peek，允许右键菜单操作
+  const handleMouseLeave = () => {
+    if (isPeeking && !isDragging.current) {
+      // 延迟 300ms 关闭 Peek，给右键菜单操作留出时间
+      leaveTimeout.current = setTimeout(() => {
+        setIsPeeking(false);
+      }, 300);
+    }
+  };
+
+  // 鼠标重新进入时取消延迟关闭
+  const handleMouseEnter = () => {
+    if (leaveTimeout.current) {
+      clearTimeout(leaveTimeout.current);
+      leaveTimeout.current = null;
+    }
+  };
+
   return (
     <>
-      {/* 边缘触发区：折叠时鼠标移到屏幕边缘 8px 范围内触发弹出 */}
+      {/* 边缘触发区：折叠时鼠标移到屏幕边缘触发 Peek */}
       {collapsed && !isPeeking && (
         <div
           className={`absolute top-0 bottom-0 w-2 z-40 cursor-pointer ${
             side === 'left' ? 'left-0' : 'right-0'
           }`}
-          onMouseEnter={() => setIsPeeking(true)}
+          onMouseEnter={() => {
+            setIsPeeking(true);
+            handleMouseEnter();
+          }}
         />
       )}
 
       <aside
         className={`group/sidebar ${sidebarClasses}`}
         style={{ width: sidebarWidth }}
-        onMouseLeave={() => {
-          if (isPeeking) {
-            setIsPeeking(false);
-          }
-        }}
+        onMouseLeave={handleMouseLeave}
+        onMouseEnter={handleMouseEnter}
       >
         {/* 内容容器 */}
         <div
@@ -124,7 +141,7 @@ export function Sidebar({
           {children}
         </div>
 
-        {/* 拖拽边缘调整宽度（展开时有效，边缘 8px 都可以拖拽） */}
+        {/* 拖拽边缘调整宽度（展开时有效，边缘可拖拽） */}
         {isShown && (
           <div
             className={`absolute top-0 bottom-0 w-2 z-30 cursor-col-resize opacity-0 hover:opacity-100 active:opacity-100 transition-opacity duration-150 ${
@@ -134,11 +151,7 @@ export function Sidebar({
             title="拖拽调整宽度"
           >
             {/* 拖拽指示线 */}
-            <div
-              className={`h-full w-[2px] bg-accent mx-auto ${
-                side === 'left' ? 'mr-0' : 'ml-0'
-              }`}
-            />
+            <div className="h-full w-[2px] bg-accent mx-auto" />
           </div>
         )}
 
@@ -162,6 +175,10 @@ export function Sidebar({
               size="sm"
               onClick={() => {
                 setIsPeeking(false);
+                if (leaveTimeout.current) {
+                  clearTimeout(leaveTimeout.current);
+                  leaveTimeout.current = null;
+                }
                 onToggleCollapsed();
               }}
               aria-label={collapsed ? '展开侧栏' : '收起侧栏'}

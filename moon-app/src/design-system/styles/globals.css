@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=Oswald:wght@500;700&family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Old+Standard+TT:ital,wght@0,400;0,700;1,400&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,700;0,9..144,900;1,9..144,400&display=swap');
 @import "tailwindcss";
 @source "../../**/*.{ts,tsx}";
 
@@ -22,6 +22,20 @@
   --color-danger: var(--moon-danger);
   --color-warning: var(--moon-warning);
   --color-success: var(--moon-success);
+
+  /* Landing Page Design Colors */
+  --color-brandRed: #b8483e;
+  --color-brandOrange: #f2a238;
+  --color-paperCream: #f7f4ec;
+  --color-paperDark: #121212;
+  --color-paperGray: #d9d4cb;
+  --color-paperWhite: #ffffff;
+
+  /* Custom Font Families */
+  --font-oswald: 'Oswald', sans-serif;
+  --font-playfair: 'Playfair Display', serif;
+  --font-old-standard: 'Old Standard TT', serif;
+  --font-fraunces: 'Fraunces', serif;
 }
 
 :root {

@@ -5,11 +5,13 @@
  */
 
 import { useState } from 'react';
+import { useI18n } from '@/lib/i18n';
 
 type FieldType = 'string' | 'text' | 'datetime' | 'list' | 'select' | 'link' | 'readonly';
 
 type FieldCardProps = {
   name: string;
+  label?: string;
   type: FieldType;
   value: unknown;
   required?: boolean;
@@ -18,7 +20,8 @@ type FieldCardProps = {
   error?: string;
 };
 
-export function FieldCard({ name, type, value, required, options, onChange, error }: FieldCardProps) {
+export function FieldCard({ name, label, type, value, required, options, onChange, error }: FieldCardProps) {
+  const { locale, t } = useI18n();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<string>(serializeValue(value));
 
@@ -35,11 +38,23 @@ export function FieldCard({ name, type, value, required, options, onChange, erro
     ? 'border-danger/40 bg-danger/5'
     : 'border-borderSubtle bg-sidebarBg/30 hover:border-accent/40';
 
+  // Format datetime according to current locale
+  const formatDatetimeValue = (v: unknown) => {
+    if (typeof v === 'string') {
+      try {
+        return new Date(v).toLocaleString(locale === 'zh' ? 'zh-CN' : 'en-US');
+      } catch {
+        return v;
+      }
+    }
+    return String(v);
+  };
+
   return (
     <div className={`flex flex-col gap-1 border p-2.5 rounded transition-colors ${cardBorder}`}>
       <div className="flex items-center justify-between text-[11px] font-sans text-fgMuted">
         <span className="font-semibold truncate">
-          {name}
+          {label ?? name}
           {required && <span className="text-danger ml-0.5">*</span>}
         </span>
         <span className="text-[9px] uppercase font-bold tracking-wider opacity-60">{type}</span>
@@ -47,7 +62,7 @@ export function FieldCard({ name, type, value, required, options, onChange, erro
 
       {type === 'readonly' ? (
         <div className="text-xs text-fgMuted bg-sidebarBg/50 p-1.5 rounded select-all font-mono truncate">
-          {String(value ?? '')}
+          {name === 'created_time' || name === 'last_edited_time' ? formatDatetimeValue(value) : String(value ?? '')}
         </div>
       ) : editing ? (
         <div className="flex flex-col gap-1">
@@ -68,7 +83,7 @@ export function FieldCard({ name, type, value, required, options, onChange, erro
               onChange={(e) => setDraft(e.target.value)}
               onBlur={commit}
               onKeyDown={(e) => { if (e.key === 'Escape') setEditing(false); }}
-              placeholder="逗号分隔,如: a, b, c"
+              placeholder={t('listPlaceholder')}
               autoFocus
               className="w-full text-xs font-sans border border-borderSubtle rounded px-2 py-1.5 focus:outline-none focus:border-accent bg-appBg text-fg"
             />
@@ -123,9 +138,9 @@ export function FieldCard({ name, type, value, required, options, onChange, erro
           className="text-xs py-1.5 px-2 rounded hover:bg-sidebarHoverBg/40 cursor-pointer min-h-[28px] flex items-center font-medium font-sans truncate text-fg"
         >
           {value === undefined || value === null || value === '' ? (
-            <span className="text-fgMuted italic font-normal">空</span>
+            <span className="text-fgMuted italic font-normal">{t('emptyValue')}</span>
           ) : (
-            <span>{displayValue(value, type)}</span>
+            <span>{type === 'datetime' ? formatDatetimeValue(value) : displayValue(value, type, locale)}</span>
           )}
         </div>
       )}
@@ -149,9 +164,9 @@ function parseValue(s: string, type: FieldType): unknown {
   }
 }
 
-function displayValue(v: unknown, type: FieldType): string {
+function displayValue(v: unknown, type: FieldType, locale: string): string {
   if (type === 'datetime' && typeof v === 'string') {
-    try { return new Date(v).toLocaleString('zh-CN'); } catch { return v; }
+    try { return new Date(v).toLocaleString(locale === 'zh' ? 'zh-CN' : 'en-US'); } catch { return v; }
   }
   if (Array.isArray(v)) return v.join(', ');
   return String(v);

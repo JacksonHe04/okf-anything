@@ -1,16 +1,18 @@
 'use client';
 
 /**
- * TiptapEditor — 富文本编辑器（彻底修复了初始化加载时触发 auto-save 与丢失 YAML frontmatter/Body 内容的严重 Bug）。
+ * TiptapEditor — 富文本编辑器
+ * - 彻底修复了初始化加载时触发 auto-save 与丢失 YAML frontmatter/Body 内容的严重 Bug
+ * - 支持 heading 元素的 id 属性（用于 TOC 跳转）
  */
 
 import { useEffect, useRef } from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, type Editor as TiptapEditorType } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
-import type { Editor } from '@tiptap/react';
+import { slugify } from '@/lib/headings-extract';
 import { splitYAML } from '@/lib/frontmatter';
 import { mdToHtml, htmlToMd } from '@/lib/markdown-serde';
 
@@ -20,7 +22,7 @@ type TiptapEditorProps = {
   onChange: (markdown: string) => void;
   onLoadFrontmatter?: (fm: Record<string, unknown>, fmText: string) => void;
   onLoadBody?: (body: string) => void;
-  editorRef?: (editor: Editor | null) => void;
+  editorRef?: (editor: TiptapEditorType | null) => void;
 };
 
 export function TiptapEditor({ fileHandle, filePath, onChange, onLoadFrontmatter, onLoadBody, editorRef }: TiptapEditorProps) {
@@ -78,11 +80,22 @@ export function TiptapEditor({ fileHandle, filePath, onChange, onLoadFrontmatter
         editor.commands.setContent(html, { parseOptions: { preserveWhitespace: 'full' } });
         onLoadFrontmatter?.(fm, fmText);
         onLoadBody?.(body); // 极其关键：在此同步载入父组件中的 bodyMd 状态，防止为空保存
-        
+
+        // 为所有 heading 添加 id 属性（用于 TOC 跳转）
+        setTimeout(() => {
+          const editorEl = editor.view.dom;
+          const headings = editorEl.querySelectorAll('h1, h2, h3, h4, h5, h6');
+          headings.forEach((heading) => {
+            if (!heading.id) {
+              heading.id = slugify(heading.textContent || '');
+            }
+          });
+        }, 100);
+
         // 微任务或延时重置标记，确保 Tiptap 渲染事件处理完毕
         setTimeout(() => {
           isSettingContent.current = false;
-        }, 100);
+        }, 200);
       } catch (err) {
         console.error('load file failed:', err);
         isSettingContent.current = false;

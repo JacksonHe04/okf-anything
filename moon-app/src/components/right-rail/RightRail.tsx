@@ -13,6 +13,7 @@ import { RelatedDocItem } from '@/design-system/components/composed/RelatedDocIt
 import type { Heading } from '@/lib/headings-extract';
 import type { ResolvedRelated } from '@/lib/related-docs-resolve';
 import type { Frontmatter } from '@/types/document';
+import { useI18n } from '@/lib/i18n';
 
 type TabId = 'properties' | 'toc' | 'related';
 
@@ -44,12 +45,13 @@ export function RightRail({
   related,
   onOpenRelated,
 }: RightRailProps) {
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<TabId>('properties');
 
   const tabs: TabItem[] = [
-    { id: 'properties', icon: <FileText size={17} />, label: '属性' },
-    { id: 'toc', icon: <ListTree size={17} />, label: '目录' },
-    { id: 'related', icon: <Link2 size={17} />, label: '关联' },
+    { id: 'properties', icon: <FileText size={17} />, label: t('propertiesTab') },
+    { id: 'toc', icon: <ListTree size={17} />, label: t('tocTab') },
+    { id: 'related', icon: <Link2 size={17} />, label: t('relatedTab') },
   ];
 
   return (
@@ -63,18 +65,18 @@ export function RightRail({
         {activeTab === 'properties' && (
           <div className="p-4 flex flex-col gap-4">
             <PageProperties
-              fileHandle={fileHandle}
-              currentPath={currentPath}
-              allFileTexts={allFileTexts}
-              frontmatter={frontmatter}
-              onFrontmatterChange={onFrontmatterChange}
+               fileHandle={fileHandle}
+               currentPath={currentPath}
+               allFileTexts={allFileTexts}
+               frontmatter={frontmatter}
+               onFrontmatterChange={onFrontmatterChange}
             />
           </div>
         )}
         {activeTab === 'toc' && (
           <div className="p-4">
             {headings.length === 0 ? (
-              <p className="text-xs text-fgMuted p-6 text-center select-none">本文档无 headings</p>
+              <p className="text-xs text-fgMuted p-6 text-center select-none font-sans">{t('noHeadings')}</p>
             ) : (
               <div className="flex flex-col gap-1">
                 {headings.map((h) => (
@@ -92,7 +94,7 @@ export function RightRail({
         {activeTab === 'related' && (
           <div className="p-4">
             {related.outgoing.length === 0 && related.incoming.length === 0 ? (
-              <p className="text-xs text-fgMuted p-6 text-center select-none">无关联文档</p>
+              <p className="text-xs text-fgMuted p-6 text-center select-none font-sans">{t('noRelated')}</p>
             ) : (
               <div className="flex flex-col gap-1.5">
                 {related.outgoing.map((r) => (

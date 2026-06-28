@@ -93,9 +93,17 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         document.head.appendChild(el);
         return el;
       })();
-    styleEl.textContent = `:root[data-theme="${resolved}"] {\n${colorsToCssVars(
-      colors,
-    )}\n}`;
+    styleEl.textContent = `:root[data-theme="${resolved}"] {
+${colorsToCssVars(colors)}
+}
+/* 主题切换平滑过渡 */
+html {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+* {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+`;
   }, [resolved, colors]);
 
   const setMode = useCallback((next: ThemeMode) => {
