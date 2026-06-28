@@ -26,8 +26,8 @@ export function ContextMenu({ x, y, onClose, actions }: ContextMenuProps) {
   return (
     <div
       ref={ref}
-      className="fixed z-[1000] min-w-[160px] bg-appBg border border-borderSubtle rounded-md shadow-xl py-1 font-sans text-[13px] text-fg"
-      style={{ left: x, top: y }}
+      className="fixed z-[1000] min-w-[180px] bg-appBg border border-borderSubtle rounded-lg shadow-lg py-1 font-sans text-[13px] text-fg"
+      style={{ left: Math.min(x, window.innerWidth - 200), top: Math.min(y, window.innerHeight - 200) }}
     >
       {actions.map((a, i) => (
         <div
@@ -79,17 +79,17 @@ export function PromptDialog({ title, defaultValue, onConfirm, onCancel }: Promp
           }}
           className="w-full px-2.5 py-2 mb-4 border border-borderSubtle rounded-sm text-sm text-fg bg-appBg outline-none focus:border-accent"
         />
-        <div className="flex gap-2 justify-end">
+        <div className="flex gap-2.5 justify-end">
           <button
             onClick={onCancel}
-            className="px-3.5 py-1.5 border border-borderSubtle bg-sidebarBg rounded-sm cursor-pointer text-sm text-fg hover:bg-sidebarHoverBg transition-colors duration-120"
+            className="px-4 py-2 border border-borderSubtle bg-sidebarBg rounded-md cursor-pointer text-sm font-medium text-fg hover:bg-sidebarHoverBg transition-colors duration-120"
           >
             取消
           </button>
           <button
             onClick={() => value.trim() && onConfirm(value.trim())}
             disabled={!value.trim()}
-            className="px-3.5 py-1.5 border border-borderSubtle bg-sidebarBg rounded-sm cursor-pointer text-sm text-fg hover:bg-sidebarHoverBg transition-colors duration-120 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 bg-accent text-white rounded-md cursor-pointer text-sm font-medium hover:bg-accentHover transition-colors duration-120 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             确定
           </button>
@@ -121,16 +121,16 @@ export function ConfirmDialog({ title, message, onConfirm, onCancel }: ConfirmDi
       >
         <h3 className="m-0 mb-3.5 text-[15px] font-semibold text-fg">{title}</h3>
         <p className="m-0 mb-4 text-[13px] text-fgSecondary leading-relaxed">{message}</p>
-        <div className="flex gap-2 justify-end">
+        <div className="flex gap-2.5 justify-end">
           <button
             onClick={onCancel}
-            className="px-3.5 py-1.5 border border-borderSubtle bg-sidebarBg rounded-sm cursor-pointer text-sm text-fg hover:bg-sidebarHoverBg transition-colors duration-120"
+            className="px-4 py-2 border border-borderSubtle bg-sidebarBg rounded-md cursor-pointer text-sm font-medium text-fg hover:bg-sidebarHoverBg transition-colors duration-120"
           >
             取消
           </button>
           <button
             onClick={onConfirm}
-            className="px-3.5 py-1.5 border border-danger bg-danger text-white rounded-sm cursor-pointer text-sm hover:opacity-90 transition-opacity duration-120"
+            className="px-4 py-2 bg-danger text-white rounded-md cursor-pointer text-sm font-medium hover:opacity-90 transition-opacity duration-120"
           >
             删除
           </button>

@@ -34,7 +34,7 @@ export function Welcome({ recentPaths, hasWorkspace, onPickRecent }: WelcomeProp
         <h2 className="mb-4 flex items-center gap-1.5 border-b border-borderSubtle/60 pb-2 text-sm font-semibold text-fg">
           快捷键
         </h2>
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-3">
           <div className="flex items-center gap-2.5 text-xs text-fgSecondary">
             <Kbd>⌘ K</Kbd>
             <span>全局搜索</span>
