@@ -34,7 +34,7 @@ export default function HomePage() {
       {/* Fine print footer */}
       <footer className="w-full bg-paperCream border-t border-paperGray py-8 select-none font-sans text-center">
         <div className="max-w-[1440px] mx-auto px-[60px] flex flex-col md:flex-row justify-between items-center text-[10px] text-paperDark/50 tracking-wider uppercase font-semibold">
-          <span>© 2026 MOONLESS SYSTEM. ALL RIGHTS RESERVED.</span>
+          <span>© 2026 MOONLESS. ALL RIGHTS RESERVED.</span>
           <span className="mt-2 md:mt-0 font-mono">
             aim for the moon, then escape.
           </span>

@@ -4,8 +4,8 @@ import { I18nProvider } from '@/lib/i18n';
 import '@/design-system/styles/globals.css';
 
 export const metadata: Metadata = {
-  title: 'MOONLESS — 本地编辑器',
-  description: 'ESCAPE / MOON / SHOT — knowledge, no monthly seat fee.',
+  title: 'MOONLESS | SAYLESS',
+  description: 'ESCAPE / MOON / SHOT — Bye Bye SaaS, Hello OKF',
 };
 
 export default function RootLayout({
