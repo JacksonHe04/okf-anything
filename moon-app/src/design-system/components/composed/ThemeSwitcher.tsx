@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * ThemeSwitcher — 主题切换（light / dark / system）。
+ * ThemeSwitcher — 主题切换（light / dark / system，完全重构为 Tailwind CSS）。
  * 循环点击：light → dark → system → light ...
  */
 
@@ -9,7 +9,6 @@ import { Sun, Moon, Monitor } from 'lucide-react';
 import { useTheme, type ThemeMode } from '../../theme';
 import { Menu, type MenuItem } from '../primitives/Menu';
 import { IconButton } from '../primitives/IconButton';
-import './ThemeSwitcher.css';
 
 export function ThemeSwitcher() {
   const { mode, resolved, setMode } = useTheme();

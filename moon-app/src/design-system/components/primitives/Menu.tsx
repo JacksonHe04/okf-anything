@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Menu — 下拉菜单。
+ * Menu — 下拉菜单（完全重构为 Tailwind CSS）。
  *
  * 触发器 + 弹出层。
  * 弹出层定位：相对触发器绝对定位，CSS 控制方向。
@@ -17,7 +17,6 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
-import './Menu.css';
 
 export interface MenuItem {
   id: string;
@@ -72,35 +71,45 @@ export function Menu({ trigger, items, align = 'start' }: MenuProps) {
     : trigger;
 
   return (
-    <div className="moon-menu-wrap" ref={wrapRef}>
+    <div className="relative inline-flex" ref={wrapRef}>
       {clonedTrigger}
       {open && (
         <div
           role="menu"
-          data-align={align}
-          className="moon-menu"
+          className={`absolute top-full z-50 mt-1 min-w-[200px] max-w-[320px] p-1 bg-appBg border border-borderSubtle rounded-lg shadow-lg ${
+            align === 'end' ? 'right-0' : 'left-0'
+          }`}
           onClick={(e) => e.stopPropagation()}
         >
           {items.map((item) => (
             <div key={item.id}>
               <button
                 role="menuitem"
-                data-danger={item.danger || undefined}
                 disabled={item.disabled}
-                className="moon-menu-item"
+                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs font-sans text-left cursor-pointer transition-colors duration-120 ${
+                  item.danger
+                    ? 'text-danger hover:bg-danger/10'
+                    : 'text-fg hover:bg-sidebarHoverBg'
+                } ${item.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                 onClick={() => {
                   if (item.disabled) return;
                   item.onSelect();
                   setOpen(false);
                 }}
               >
-                {item.icon && <span className="moon-menu-icon">{item.icon}</span>}
-                <span className="moon-menu-label">{item.label}</span>
+                {item.icon && (
+                  <span className={`inline-flex items-center justify-center w-3.5 h-3.5 flex-shrink-0 ${
+                    item.danger ? 'text-danger' : 'text-fgMuted'
+                  } [&>svg]:w-3.5 [&>svg]:h-3.5`}>
+                    {item.icon}
+                  </span>
+                )}
+                <span className="flex-1 min-w-0 truncate">{item.label}</span>
                 {item.shortcut && (
-                  <span className="moon-menu-shortcut">{item.shortcut}</span>
+                  <span className="font-mono text-[11px] text-fgMuted flex-shrink-0">{item.shortcut}</span>
                 )}
               </button>
-              {item.separatorAfter && <div className="moon-menu-sep" />}
+              {item.separatorAfter && <div className="h-px my-1 bg-borderSubtle" />}
             </div>
           ))}
         </div>

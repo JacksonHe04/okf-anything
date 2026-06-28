@@ -1,10 +1,8 @@
 'use client';
 
 /**
- * Divider — 水平分割线。
+ * Divider — 水平分割线（完全重构为 Tailwind CSS）。
  */
-
-import './Divider.css';
 
 export interface DividerProps {
   orientation?: 'horizontal' | 'vertical';
@@ -12,5 +10,25 @@ export interface DividerProps {
 }
 
 export function Divider({ orientation = 'horizontal', spacing = 'md' }: DividerProps) {
-  return <hr className="moon-divider" data-orient={orientation} data-spacing={spacing} />;
+  const baseClasses = 'border-none bg-borderSubtle';
+  const orientClasses = orientation === 'horizontal' ? 'w-full h-px' : 'w-px self-stretch';
+  const spacingClasses = (() => {
+    if (orientation === 'horizontal') {
+      switch (spacing) {
+        case 'sm': return 'my-1';
+        case 'md': return 'my-2';
+        case 'lg': return 'my-4';
+        default: return '';
+      }
+    } else {
+      switch (spacing) {
+        case 'sm': return 'mx-1';
+        case 'md': return 'mx-2';
+        case 'lg': return 'mx-4';
+        default: return '';
+      }
+    }
+  })();
+
+  return <hr className={`${baseClasses} ${orientClasses} ${spacingClasses}`} />;
 }

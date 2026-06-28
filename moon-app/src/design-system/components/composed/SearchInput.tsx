@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * SearchInput — 顶栏常驻搜索输入框。
+ * SearchInput — 顶栏常驻搜索输入框（完全重构为 Tailwind CSS）。
  *
  * 行为：
  * - 受控：value + onChange
@@ -13,7 +13,6 @@ import { Search } from 'lucide-react';
 import { forwardRef, type InputHTMLAttributes } from 'react';
 import { Input } from '../primitives/Input';
 import { Kbd } from '../primitives/Kbd';
-import './SearchInput.css';
 
 export interface SearchInputProps
   extends Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value' | 'size' | 'onSubmit'> {
@@ -30,20 +29,22 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
     ref,
   ) {
     return (
-      <div className="moon-search">
-        <Input
-          ref={ref}
-          size="sm"
-          iconLeft={<Search size={14} />}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') onSearch?.(value);
-          }}
-          placeholder={placeholder}
-          {...rest}
-        />
-        <span className="moon-search-kbd">
+      <div className="relative inline-flex items-center w-[280px]">
+        <div className="w-full pr-12">
+          <Input
+            ref={ref}
+            size="sm"
+            iconLeft={<Search size={14} />}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onSearch?.(value);
+            }}
+            placeholder={placeholder}
+            {...rest}
+          />
+        </div>
+        <span className="absolute right-2 inline-flex items-center pointer-events-none">
           <Kbd>⌘ K</Kbd>
         </span>
       </div>
