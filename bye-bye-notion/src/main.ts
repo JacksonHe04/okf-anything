@@ -465,12 +465,14 @@ async function main() {
   const args = process.argv.slice(2);
 
   if (args.includes("--help") || args.includes("-h")) {
-    console.log(`Usage: npm start -- --root <id> [options]
+    console.log(`Usage: npm start -- [options]
 
-Required:
-  --root <id>, -r <id>     Notion page UUID (含连字符的 8-4-4-4-12 格式或 notion.so URL)
+Modes (mutually exclusive):
+  --root <id>, -r <id>       Start from a Notion page (recursive)
+  --data-source <id>, -ds <id>  Pull a specific database directly
 
 Options:
+  --parent-dir <path>           Parent directory for data_source mode (relative to export dir)
   ${EXPORT_DIR_HELP}
       也可以通过环境变量 BYE_BYE_EXPORT_DIR 设置
 
@@ -486,12 +488,24 @@ Default export directory: ${DEFAULT_EXPORT_DIR}
   }
 
   let rootId: string | null = null;
+  let dataSourceId: string | null = null;
+  let overrideParentDir: string | null = null;
+
   const rootArg = parseFlagValue(args, "--root") ?? parseFlagValue(args, "-r");
-  if (rootArg) {
-    rootId = extractUuid(rootArg);
+  const dsArg = parseFlagValue(args, "--data-source") ?? parseFlagValue(args, "-ds");
+  const parentDirArg = parseFlagValue(args, "--parent-dir") ?? parseFlagValue(args, "-pd");
+
+  if (rootArg) rootId = extractUuid(rootArg);
+  if (dsArg) dataSourceId = extractUuid(dsArg);
+  if (parentDirArg) overrideParentDir = parentDirArg;
+
+  // 互斥检查
+  if (rootId && dataSourceId) {
+    console.error("Error: --root and --data-source are mutually exclusive.");
+    process.exit(1);
   }
-  if (!rootId) {
-    console.error("Must provide --root <id>.");
+  if (!rootId && !dataSourceId) {
+    console.error("Must provide either --root <id> or --data-source <id>.");
     process.exit(1);
   }
 
@@ -499,7 +513,8 @@ Default export directory: ${DEFAULT_EXPORT_DIR}
   const exportRootDir = exportDir.resolved;
 
   console.log("→ bye-bye-notion — Starting Migration (streaming + notion_id dedup)");
-  console.log(`  Root:       ${rootId}`);
+  console.log(`  Mode:       ${rootId ? "page (recursive)" : "data_source (direct)"}`);
+  console.log(`  ID:         ${rootId ?? dataSourceId}`);
   console.log(`  Export dir: ${exportRootDir} (source: ${exportDir.source}, raw: ${exportDir.raw})`);
 
   // 启动时从 exportRootDir 加载 notion_id 注册表
@@ -565,10 +580,67 @@ Default export directory: ${DEFAULT_EXPORT_DIR}
   };
 
   console.log("[2/3] Streaming pull...\n");
-  const result = await scanAndWritePage(ctx, rootId, exportRootDir);
-  if (!result) {
-    console.error(`\n  ✗ Could not pull root ${rootId.slice(0, 8)}`);
-    process.exit(1);
+
+  if (dataSourceId) {
+    // --data-source 模式：直接拉取数据库
+    // 先获取 dataSource 的 parent 信息，找到对应的本地路径
+    let parentDir = exportRootDir;
+
+    // 优先使用手动指定的 parent-dir
+    if (overrideParentDir) {
+      parentDir = path.resolve(exportRootDir, overrideParentDir);
+      console.log(`  Using override parent-dir: ${parentDir}`);
+    } else {
+      try {
+        const ds = await retrieveDataSource(client, limiter, dataSourceId);
+
+        // 尝试多种方式查找 parent：
+        // 1. ds.parentId (来自 database_parent.page_id)
+        // 2. ds.parent 中的 database_id (container ID，可能在 registry 中)
+        let parentFound = false;
+        const idsToTry = new Set<string>();
+
+        if (ds.parentId) idsToTry.add(ds.parentId);
+
+        // 直接从 API 获取 parent.database_id (container ID)
+        const rawDs = await limiter.run(
+          () => client.dataSources.retrieve({ data_source_id: dataSourceId }),
+          `ds:${dataSourceId.slice(0, 8)}`,
+        ) as any;
+        if (rawDs.parent?.database_id) idsToTry.add(rawDs.parent.database_id);
+
+        for (const id of idsToTry) {
+          const parentEntry = ctx.registry.get(id);
+          if (parentEntry) {
+            const parentAbsPath = path.resolve(exportRootDir, parentEntry.localPath);
+            parentDir = path.dirname(parentAbsPath);
+            console.log(`  Parent found locally: ${parentEntry.title} → ${parentDir}`);
+            parentFound = true;
+            break;
+          }
+        }
+
+        if (!parentFound) {
+          const triedIds = Array.from(idsToTry).map(id => id.slice(0, 8) + "…").join(", ");
+          console.log(`  Parent not in registry [${triedIds}], using exportRootDir`);
+        }
+      } catch (e) {
+        console.warn(`  Could not fetch dataSource metadata, using exportRootDir: ${e}`);
+      }
+    }
+
+    const result = await scanAndWriteDatabase(ctx, dataSourceId, parentDir);
+    if (!result) {
+      console.error(`\n  ✗ Could not pull data_source ${dataSourceId.slice(0, 8)}`);
+      process.exit(1);
+    }
+  } else {
+    // --root 模式：递归拉取页面
+    const result = await scanAndWritePage(ctx, rootId!, exportRootDir);
+    if (!result) {
+      console.error(`\n  ✗ Could not pull root ${rootId!.slice(0, 8)}`);
+      process.exit(1);
+    }
   }
 
   console.log(`\n[3/3] Done! Wrote ${ctx.stats.written} new, skipped ${ctx.stats.skipped} (already exported), ${ctx.stats.failed} failed.`);
