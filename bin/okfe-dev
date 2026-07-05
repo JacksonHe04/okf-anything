@@ -1,0 +1,101 @@
+#!/usr/bin/env node
+// Development-only CLI shim.
+//
+// Resolves to the current repo's compiled `dist/cli.js`, rebuilding on
+// demand if `dist/` is missing or stale relative to `src/`. After build
+// we re-exec into `dist/cli.js` so the user's process tree shows
+// `okfe-dev` as the entrypoint.
+//
+// Pass `--no-rebuild` to skip the stale check (use after `pnpm dev`
+// watcher has already rebuilt).
+//
+// This shim is intentionally NOT declared in package.json `bin`, so it
+// never ships to npm. Use `pnpm dev:link` to expose `okfe-dev` globally
+// during local development.
+
+import { execFileSync, spawn } from "child_process";
+import { existsSync, statSync, readdirSync } from "fs";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const pkgDir = join(here, "..");
+const distEntry = join(pkgDir, "dist", "cli.js");
+const srcDir = join(pkgDir, "src");
+
+const args = process.argv.slice(2);
+const noRebuild = args[0] === "--no-rebuild";
+if (noRebuild) args.shift();
+
+function newestMtimeMs(dir) {
+  let newest = 0;
+  const stack = [dir];
+  while (stack.length) {
+    const cur = stack.pop();
+    let entries;
+    try {
+      entries = readdirSync(cur, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      const p = join(cur, e.name);
+      if (e.isDirectory()) {
+        stack.push(p);
+      } else if (e.isFile()) {
+        const mt = statSync(p).mtimeMs;
+        if (mt > newest) newest = mt;
+      }
+    }
+  }
+  return newest;
+}
+
+function needsRebuild() {
+  if (!existsSync(distEntry)) return true;
+  const srcMtime = newestMtimeMs(srcDir);
+  let distMtime = 0;
+  try {
+    distMtime = statSync(distEntry).mtimeMs;
+  } catch {
+    return true;
+  }
+  return srcMtime > distMtime;
+}
+
+function rebuild() {
+  process.stderr.write("[okfe-dev] dist/ is stale or missing; running pnpm build...\n");
+  try {
+    execFileSync("pnpm", ["run", "build"], {
+      cwd: pkgDir,
+      stdio: ["ignore", "inherit", "inherit"],
+    });
+  } catch (err) {
+    process.stderr.write(`[okfe-dev] build failed: ${err.message}\n`);
+    process.exit(1);
+  }
+}
+
+if (!noRebuild && needsRebuild()) {
+  rebuild();
+}
+
+if (!existsSync(distEntry)) {
+  process.stderr.write(
+    `[okfe-dev] dist/cli.js still missing after build. Did tsc succeed?\n`
+  );
+  process.exit(1);
+}
+
+// Re-exec into the real CLI so the user sees `dist/cli.js` resolution
+// and any stack frames come from compiled code, not this shim.
+const child = spawn(process.execPath, [distEntry, ...args], {
+  stdio: "inherit",
+});
+child.on("exit", (code, signal) => {
+  if (signal) {
+    process.kill(process.pid, signal);
+  } else {
+    process.exit(code ?? 0);
+  }
+});
