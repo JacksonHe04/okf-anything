@@ -119,7 +119,12 @@ export class NotionSyncer implements PlatformSyncer {
     return map;
   }
 
-  async writeNew(item: CloudItem, targetDir: string, _config: LoadedConfig): Promise<{ relPath: string }> {
+  async writeNew(
+    item: CloudItem,
+    targetDir: string,
+    _config: LoadedConfig,
+    existingInonId?: string,
+  ): Promise<{ relPath: string }> {
     const client = this.client();
     const limiter = new NotionLimiter();
     const fetchChildren = makeFetchChildren(client, limiter);
@@ -158,6 +163,10 @@ export class NotionSyncer implements PlatformSyncer {
       parentId: meta.parentId,
       properties: meta.properties as Record<string, unknown>,
     });
+    // Preserve the existing `inon_id` on `writeUpdate` so the doc keeps
+    // its stable identity across syncs. `writeFrontmatterBody` will
+    // mint a fresh id if `existingInonId` is undefined.
+    if (existingInonId) fm.inon_id = existingInonId;
     const md = writeFrontmatterBody(fm as unknown as Record<string, unknown>, `# ${meta.title}\n\n${body}\n`);
     fs.writeFileSync(absPath, md, "utf8");
     return { relPath: localPath };
@@ -165,7 +174,22 @@ export class NotionSyncer implements PlatformSyncer {
 
   async writeUpdate(item: CloudItem, existing: LocalEntry, _config: LoadedConfig) {
     // For v1, writeUpdate is a full re-fetch + overwrite (idempotent).
-    return this.writeNew(item, path.dirname(existing.absPath), _config);
+    // Read the existing file's `inon_id` first so we can preserve it
+    // across syncs — `inon_id` is a stable, CLI-minted identity and
+    // must not churn with each sync round.
+    const preserved = await this.readExistingInonId(existing.absPath);
+    return this.writeNew(item, path.dirname(existing.absPath), _config, preserved);
+  }
+
+  private async readExistingInonId(absPath: string): Promise<string | undefined> {
+    try {
+      const raw = await fs.promises.readFile(absPath, "utf8");
+      const { frontmatter } = parseFrontmatter(raw);
+      const v = frontmatter?.inon_id;
+      return typeof v === "string" && v.length > 0 ? v : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   finalize(config: LoadedConfig, when: Date): LoadedConfig {

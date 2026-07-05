@@ -77,6 +77,10 @@ export class LarkSyncer implements PlatformSyncer {
   }
 
   async writeUpdate(_item: CloudItem, _existing: LocalEntry, _config: LoadedConfig): Promise<{ relPath: string }> {
+    // TODO: when wired, mirror Notion's `readExistingInonId` pattern
+    // (see src/platforms/notion/syncer.ts) — read existing file's
+    // `inon_id` first, pass it through to writeNew so identity is
+    // preserved across syncs.
     throw new Error("lark platform: writeUpdate not yet implemented (see todo in listCloud).");
   }
 

@@ -12,6 +12,7 @@ import YAML from "yaml";
 
 export interface NotionOkfFields {
   type: "Notion Page" | "Notion Database";
+  source: "notion";
   title: string;
   resource: string;
   timestamp: string;
@@ -20,6 +21,8 @@ export interface NotionOkfFields {
   last_edited_time: string;
   notion_parent_type: string;
   notion_parent_id: string | null;
+  /** CLI-minted, workspace-unique identity. Populated by `writeFrontmatterBody`. */
+  inon_id?: string;
   properties?: Record<string, unknown>;
 }
 
@@ -35,6 +38,7 @@ export function buildNotionPageFrontmatter(args: {
 }): NotionOkfFields {
   const fm: NotionOkfFields = {
     type: "Notion Page",
+    source: "notion",
     title: args.title || "untitled",
     resource: args.url,
     timestamp: args.lastEditedTime,
@@ -60,6 +64,7 @@ export function buildNotionDatabaseFrontmatter(args: {
 }): NotionOkfFields {
   return {
     type: "Notion Database",
+    source: "notion",
     title: args.title || "untitled",
     resource: args.url,
     timestamp: args.lastEditedTime,

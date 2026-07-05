@@ -3,6 +3,7 @@
  */
 export interface LarkOkfFields {
   type: "Lark Document";
+  source: "lark";
   title: string;
   resource: string;
   timestamp: string;
@@ -11,6 +12,8 @@ export interface LarkOkfFields {
   last_edited_time: string;
   lark_parent_type: string;
   lark_parent_id: string | null;
+  /** CLI-minted, workspace-unique identity. Populated by `writeFrontmatterBody`. */
+  inon_id?: string;
 }
 
 export function buildLarkFrontmatter(args: {
@@ -24,6 +27,7 @@ export function buildLarkFrontmatter(args: {
 }): LarkOkfFields {
   return {
     type: "Lark Document",
+    source: "lark",
     title: args.title || "untitled",
     resource: args.url,
     timestamp: args.lastEditedTime,
