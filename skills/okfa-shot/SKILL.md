@@ -1,11 +1,11 @@
 ---
 name: okfa-shot
-description: moonshot: local OKF Markdown query / mutate engine. Performs find / search / replace / ls, all respecting the workspace's gitignore-style ignore rules. Use whenever the user wants to look up, edit, or list markdown files in their workspace.
+description: shot: local OKF Markdown query / mutate engine. Performs find / search / replace / ls, all respecting the workspace's gitignore-style ignore rules. Use whenever the user wants to look up, edit, or list markdown files in their workspace.
 ---
 
 # okfa shot
 
-The moonshot engine is what makes this workspace a Knowledge Base that an
+The shot engine is what makes this workspace a Knowledge Base that an
 AI Agent can drive. Always use `okfa shot`, never raw `grep` / `find` /
 filesystem walks, so the agent respects:
 

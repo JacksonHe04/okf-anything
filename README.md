@@ -51,7 +51,7 @@ Code) search with surgical precision.
 - **Same workspace, mixed content** — keep your code, your PDFs, your
   Notion docs, your docs-of-docs all in the same tree, organized by
   *your* projects.
-- **No RAG detours** — moonshot's `shot` is grep + YAML fields under
+- **No RAG detours** — `okfa shot` is grep + YAML fields under
   the hood. Predictable, debuggable, no embeddings to babysit.
 
 ## Install
@@ -184,7 +184,7 @@ Field mapping for Lark is symmetric (`lark_id`, `lark_parent_type`, …).
 | Notion sync | ✅ Working.        |
 | Lark pull   | 🚧 v1 stub.       |
 | Lark sync   | 🚧 v1 stub.       |
-| moonshot    | ✅ Working.        |
+| shot        | ✅ Working.        |
 
 Lark's wiki walker is intentionally left as a follow-up so we can ship
 the CLI / Skill surface immediately; the local `lark/` subdirectory is
@@ -208,7 +208,7 @@ okf-anything/                      ← repo root (= @inon-ai/okf-anything)
 │   ├── config/                    ← `.okfa/config.yaml` loader + zod schema
 │   ├── ignore/                    ← gitignore-style matcher (`.okfaignore`)
 │   ├── okf/                       ← (reserved for shared OKF helpers)
-│   ├── shot/                      ← moonshot: ls / find / search / replace
+│   ├── shot/                      ← shot: ls / find / search / replace
 │   ├── sync/                      ← generic engine (UUID + last_edited_time)
 │   ├── platforms/
 │   │   ├── notion/                ← page / database / search / blocks / …

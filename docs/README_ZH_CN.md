@@ -66,7 +66,7 @@ okfa shot find type --eq "Notion Page"
   下次同步照样命中正确位置，不会重新拉取。
 - **同一个工作区** —— 代码、PDF、Notion 文档、文档的文档，全部混在
   同一个目录树里，按你的项目组织。
-- **不绕 RAG** —— moonshot 的 `shot` 内部就是 grep + YAML 字段。
+- **不绕 RAG** —— shot 的 `shot` 内部就是 grep + YAML 字段。
   可预测、可调试，不用伺候 embedding。
 
 ## 命令一览
@@ -117,7 +117,7 @@ notion_parent_id: ...
 | Notion 同步 | ✅ 可用。     |
 | Lark 拉取  | 🚧 v1 stub。 |
 | Lark 同步  | 🚧 v1 stub。 |
-| moonshot   | ✅ 可用。     |
+| shot      | ✅ 可用。     |
 
 Lark 的 wiki walker 暂时 stub，先把 CLI / Skill 这层产品形态立起来。
 本地 `lark/` 子目录仍然能被 `okfa shot *` 完整读取，`okfa sync lark`

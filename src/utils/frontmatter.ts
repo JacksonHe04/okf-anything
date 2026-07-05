@@ -1,8 +1,7 @@
 /**
  * YAML frontmatter read/write.
  *
- * Compatible shape with the legacy `moon-escape/common/frontmatter.ts` but
- * slightly hardened:
+ * Hardened compared to the original reference implementation:
  * - Matches both `---\n...\n---` and `---\n...\n---...` variants.
  * - Tolerant of malformed YAML (falls back to no-frontmatter).
  */

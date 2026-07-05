@@ -6,7 +6,7 @@
  *   init                                bootstrap a workspace
  *   config <show|path|root|edit>       introspect / edit the loaded config
  *   sync <notion|lark> [--root ...]     pull + update from a cloud platform
- *   shot <ls|find|search|replace> ...   moonshot: query the local workspace
+ *   shot <ls|find|search|replace> ...   shot: query the local workspace
  */
 import { cmdInit, explainInit } from "./commands/init.js";
 import { cmdConfig, explainConfig } from "./commands/config.js";

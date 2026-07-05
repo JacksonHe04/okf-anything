@@ -11,8 +11,6 @@ stub for v1) into a local **OKF (Open Knowledge Format)** Markdown
 workspace. By default the workspace lives at `~/iNon`. You can change it
 in `.okfa/config.yaml`.
 
-Compared to the old `iMon` line:
-
 - No web page, no app, no editor UI in scope. okf-anything is just a CLI
   (`okfa`) and Claude Code Skills.
 - Sync and pull are **the same operation**; pull is just sync with an
@@ -32,7 +30,7 @@ okf-anything/                            ← repo root (this file lives here)
 │   ├── commands/{init,config,sync,shot}.ts
 │   ├── config/                   ← .okfa/config.yaml loader + zod schema
 │   ├── ignore/                   ← gitignore-style matcher
-│   ├── shot/                     ← moonshot: ls / find / search / replace
+│   ├── shot/                     ← shot: ls / find / search / replace
 │   ├── sync/                     ← generic engine (UUID + last_edited_time)
 │   ├── platforms/{notion,lark}/  ← per-platform adapters
 │   └── utils/                    ← shared helpers

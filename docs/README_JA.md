@@ -72,7 +72,7 @@ okfa shot find type --eq "Notion Page"
 - **同一ワークスペース** — コード、PDF、Notion ドキュメント、ドキュメント
   のドキュメント、すべてを同じディレクトリツリーで、プロジェクトごとに
   整理できます。
-- **RAG 不要** — moonshot の `shot` は grep + YAML フィールド。予測可
+- **RAG 不要** — shot の `shot` は grep + YAML フィールド。予測可
   能で、デバッグしやすく、embedding の世話は不要です。
 
 ## コマンド一覧
@@ -124,7 +124,7 @@ notion_parent_id: ...
 | Notion 同期   | ✅ 動作中。      |
 | Lark 取得    | 🚧 v1 スタブ。  |
 | Lark 同期    | 🚧 v1 スタブ。  |
-| moonshot     | ✅ 動作中。      |
+| shot        | ✅ 動作中。      |
 
 Lark の wiki walker は意図的に後続作業として残し、まず CLI / Skill 層
 をリリースします。ローカルの `lark/` ディレクトリは `okfa shot *` で完
