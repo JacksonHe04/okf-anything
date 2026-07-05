@@ -1,9 +1,9 @@
 ---
-name: okfe-sync-notion
+name: okfa-sync-notion
 description: Sync Notion pages / databases into the local workspace as OKF Markdown. Honors idempotent UUID + last_edited_time semantics. Use whenever the user wants to pull Notion content, refresh an existing mirror, or schedule a recurring sync.
 ---
 
-# okfe sync notion
+# okfa sync notion
 
 This Skill is the canonical way Claude should drive Notion ↔ local sync.
 Never touch the Notion API directly — always go through the CLI.
@@ -20,7 +20,7 @@ Never touch the Notion API directly — always go through the CLI.
 ## How to invoke
 
 ```
-okfe sync notion [--root <uuid>] [--dry-run]
+okfa sync notion [--root <uuid>] [--dry-run]
 ```
 
 - `--root <uuid>` overrides `notion.state.default_root_id` for this run.
@@ -56,7 +56,7 @@ Short version for Claude:
 
 > Create a recurring scheduled task in the user's app that runs daily at
 > 03:30 local. The task prompt must be self-contained: it should call
-> `okfe sync notion` and report scanned/created/updated/skipped/failed.
+> `okfa sync notion` and report scanned/created/updated/skipped/failed.
 
 For Notion, the user must have already granted their Personal Access
 Token read access to the pages they want mirrored.

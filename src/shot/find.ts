@@ -2,9 +2,9 @@
  * shot find — exact-match frontmatter field lookup.
  *
  * Example:
- *   okfe shot find --field status --value active
- *   okfe shot find notion_id --eq <uuid>
- *   okfe shot find tag  # existence-only
+ *   okfa shot find --field status --value active
+ *   okfa shot find notion_id --eq <uuid>
+ *   okfa shot find tag  # existence-only
  */
 import type { LoadedConfig } from "../config/loader.js";
 import { readAllMd, type ShotFile } from "./walk.js";

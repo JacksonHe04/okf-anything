@@ -1,5 +1,5 @@
 /**
- * `okfe config show|set|edit` — introspect and edit the workspace config.
+ * `okfa config show|set|edit` — introspect and edit the workspace config.
  */
 import * as fs from "fs";
 import * as path from "path";
@@ -10,7 +10,7 @@ export function cmdConfig(argv: string[]): number {
   const sub = argv[0] ?? "show";
   const loaded = loadConfig();
   if (!loaded) {
-    console.error("✗ no .okfe/config.yaml found. Run `okfe init` first.");
+    console.error("✗ no .okfa/config.yaml found. Run `okfa init` first.");
     return 1;
   }
   switch (sub) {
@@ -39,7 +39,7 @@ export function cmdConfig(argv: string[]): number {
 }
 
 export function explainConfig(): string {
-  return `Usage: okfe config <show|path|root|edit>
+  return `Usage: okfa config <show|path|root|edit>
 
   show   Pretty-print the loaded config.
   path   Print the absolute path to config.yaml.

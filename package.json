@@ -1,11 +1,11 @@
 {
-  "name": "@inon-ai/okf-everything",
+  "name": "@inon-ai/okf-anything",
   "version": "0.1.0",
-  "description": "okf-everything — escape Notion / Lark, sync into a local OKF Markdown knowledge base. CLI for humans & Claude Code.",
+  "description": "okf-anything — escape Notion / Lark, sync into a local OKF Markdown knowledge base. CLI for humans & Claude Code.",
   "type": "module",
   "main": "./dist/cli.js",
   "bin": {
-    "okfe": "./bin/okfe"
+    "okfa": "./bin/okfa"
   },
   "files": [
     "dist",
@@ -21,7 +21,7 @@
     "clean": "rm -rf dist"
   },
   "keywords": [
-    "okf-everything",
+    "okf-anything",
     "okf",
     "notion",
     "lark",

@@ -60,7 +60,7 @@ function searchWithRipgrep(root: string, opts: SearchOptions): Promise<SearchHit
       "--line-number",
       "--hidden",
       "--glob", "!.git",
-      "--glob", "!.okf-everything",
+      "--glob", "!.okf-anything",
       opts.caseInsensitive ? "-i" : "",
       opts.regex ? "" : "-F",
       "--", opts.query, root,

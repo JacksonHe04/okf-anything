@@ -1,20 +1,20 @@
-# okf-everything
+# okf-anything
 
 > **MO** + **O** + **K** + **F**ormat. The original product intent — escape
 > centralized cloud knowledge bases — has not changed. What changed in the
 > 2026-07 rebrand: name, scope, and architecture.
 
-## What okf-everything is
+## What okf-anything is
 
-okf-everything pulls and incrementally syncs **Notion** (and **Lark / Feishu**,
+okf-anything pulls and incrementally syncs **Notion** (and **Lark / Feishu**,
 stub for v1) into a local **OKF (Open Knowledge Format)** Markdown
 workspace. By default the workspace lives at `~/iNon`. You can change it
-in `.okfe/config.yaml`.
+in `.okfa/config.yaml`.
 
 Compared to the old `iMon` line:
 
-- No web page, no app, no editor UI in scope. okf-everything is just a CLI
-  (`okfe`) and Claude Code Skills.
+- No web page, no app, no editor UI in scope. okf-anything is just a CLI
+  (`okfa`) and Claude Code Skills.
 - Sync and pull are **the same operation**; pull is just sync with an
   empty local.
 - Three UUID spaces coexist on disk: `notion_id`, `lark_id`, plus the
@@ -26,18 +26,18 @@ Compared to the old `iMon` line:
 ## Repo layout
 
 ```
-okf-everything/                            ← repo root (this file lives here)
+okf-anything/                            ← repo root (this file lives here)
 ├── src/                          ← CLI source (TS)
 │   ├── cli.ts                    ← entry
 │   ├── commands/{init,config,sync,shot}.ts
-│   ├── config/                   ← .okfe/config.yaml loader + zod schema
+│   ├── config/                   ← .okfa/config.yaml loader + zod schema
 │   ├── ignore/                   ← gitignore-style matcher
 │   ├── shot/                     ← moonshot: ls / find / search / replace
 │   ├── sync/                     ← generic engine (UUID + last_edited_time)
 │   ├── platforms/{notion,lark}/  ← per-platform adapters
 │   └── utils/                    ← shared helpers
-├── bin/okfe                     ← executable shim
-├── skills/{okfe-init, okfe-sync-notion, okfe-sync-lark, okfe-shot}/SKILL.md
+├── bin/okfa                     ← executable shim
+├── skills/{okfa-init, okfa-sync-notion, okfa-sync-lark, okfa-shot}/SKILL.md
 ├── templates/cron-schedule.md    ← recipe for scheduled syncs
 ├── docs/                         ← design / decision records
 └── dist/                         ← build output (gitignored)
@@ -71,7 +71,7 @@ Field mapping for Lark is symmetric (`lark_id`, `lark_parent_type`, etc.).
 
 ## References
 
-- Design notes: `docs/okf-everything/design.md` (also mirrored under
+- Design notes: `docs/okf-anything/design.md` (also mirrored under
   `.agents/docs/`).
 - Notion PAT: https://developers.notion.com/guides/get-started/personal-access-tokens
 

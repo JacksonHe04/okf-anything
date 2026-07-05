@@ -1,5 +1,5 @@
 /**
- * Schema of `<root>/.okfe/config.yaml`
+ * Schema of `<root>/.okfa/config.yaml`
  *
  * Top-level fields are kept flat so users can grep/edit by hand without
  * learning a deeply nested structure.
@@ -49,7 +49,7 @@ export const SyncConfigSchema = z.object({
   defaultRootId: z.string().optional(),
 });
 
-export const OkfEverythingConfigSchema = z.object({
+export const OkfAnythingConfigSchema = z.object({
   schema_version: z.literal(1).default(1),
   root: z.string().optional(),
   notion: PlatformConfigSchema.optional(),
@@ -58,9 +58,9 @@ export const OkfEverythingConfigSchema = z.object({
   shot: ShotConfigSchema.optional().default({}),
   sync: SyncConfigSchema.optional().default({}),
 });
-export type OkfEverythingConfig = z.infer<typeof OkfEverythingConfigSchema>;
+export type OkfAnythingConfig = z.infer<typeof OkfAnythingConfigSchema>;
 
-export const DEFAULT_CONFIG: OkfEverythingConfig = {
+export const DEFAULT_CONFIG: OkfAnythingConfig = {
   schema_version: 1,
   ignore: [],
   shot: { ignore: [], maxFrontmatterBytes: 1_048_576 },

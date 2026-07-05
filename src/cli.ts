@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * okfe CLI entrypoint.
+ * okfa CLI entrypoint.
  *
  * Subcommands:
  *   init                                bootstrap a workspace
@@ -36,7 +36,7 @@ async function main(): Promise<number> {
       case "version":
       case "-v":
       case "--version":
-        console.log("okfe 0.1.0");
+        console.log("okfa 0.1.0");
         return 0;
       case "help":
         console.log(topHelp());
@@ -69,7 +69,7 @@ main().then(
 );
 
 function topHelp(): string {
-  return `okfe — escape Notion / Lark, sync into local OKF Markdown.
+  return `okfa — escape Notion / Lark, sync into local OKF Markdown.
 
 ${explainInit()}
 

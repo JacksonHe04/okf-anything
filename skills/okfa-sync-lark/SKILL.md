@@ -1,11 +1,11 @@
 ---
-name: okfe-sync-lark
+name: okfa-sync-lark
 description: Sync Lark / Feishu docs into the local workspace as OKF Markdown. Status: v1 stub (no-op). Reads existing lark_id-keyed files. Use whenever the user wants to mirror Lark content; surface TODO when the cloud walker is not yet implemented.
 ---
 
-# okfe sync lark
+# okfa sync lark
 
-⚠ v1 status: cloud listing & body fetch are stubbed. Calling `okfe sync
+⚠ v1 status: cloud listing & body fetch are stubbed. Calling `okfa sync
 lark` today is a no-op (with a warning). Local files under
 `<root>/lark/` continue to be respected by other commands (`shot find`,
 `shot search`, etc.).
@@ -13,7 +13,7 @@ lark` today is a no-op (with a warning). Local files under
 ## How to invoke
 
 ```
-okfe sync lark [--root <uuid>] [--dry-run]
+okfa sync lark [--root <uuid>] [--dry-run]
 ```
 
 The CLI honors the same `--root` / `--dry-run` semantics as Notion.
