@@ -7,6 +7,8 @@
  */
 import * as fs from "fs";
 import YAML from "yaml";
+import { ensureInonId } from "./id.js";
+import { ensureOkfShape } from "./okf-shape.js";
 
 const FRONTMATTER_RE = /^---\s*\n([\s\S]*?)\n---/;
 
@@ -38,6 +40,13 @@ export function writeFrontmatterBody(
   frontmatter: Record<string, unknown>,
   body: string,
 ): string {
+  // Single chokepoint: every new-file write funnels through here, so
+  // guaranteeing the full OKF shape here propagates the invariant to
+  // Notion sync, Lark sync, `okfa new`, `okfa shot adopt`, and any
+  // future local doc creator. Existing values are preserved
+  // (idempotent); missing values are filled from `ensureOkfShape`'s
+  // defaults.
+  ensureOkfShape(frontmatter);
   const fm = YAML.stringify(frontmatter).trimEnd();
   const bodyClean = body.startsWith("\n") ? body : "\n" + body;
   return `---\n${fm}\n---${bodyClean}`;

@@ -1,6 +1,6 @@
 {
   "name": "@inon-ai/okf-anything",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "okf-anything — escape Notion / Lark, sync into a local OKF Markdown knowledge base. CLI for humans & Claude Code.",
   "type": "module",
   "main": "./dist/cli.js",
@@ -23,7 +23,14 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "tsx src/cli.ts",
     "clean": "rm -rf dist",
-    "prepublishOnly": "pnpm run build && pnpm run typecheck"
+    "prepublishOnly": "pnpm run build && pnpm run typecheck",
+
+    "dev": "tsc -p tsconfig.json --watch",
+    "dev:build": "pnpm run build",
+    "dev:run": "node bin/okfe-dev",
+    "dev:link": "node bin/dev-link.mjs",
+    "dev:unlink": "node bin/dev-unlink.mjs",
+    "test": "pnpm run build && node --test tests/"
   },
   "keywords": [
     "okf-anything",
