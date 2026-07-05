@@ -14,11 +14,16 @@
     "templates",
     "README.md"
   ],
+  "publishConfig": {
+    "access": "public",
+    "tag": "latest"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json && node bin/build-helper.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "tsx src/cli.ts",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prepublishOnly": "pnpm run build && pnpm run typecheck"
   },
   "keywords": [
     "okf-anything",
@@ -31,6 +36,14 @@
     "claude-code"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JacksonHe04/okf-anything.git"
+  },
+  "homepage": "https://github.com/JacksonHe04/okf-anything#readme",
+  "bugs": {
+    "url": "https://github.com/JacksonHe04/okf-anything/issues"
+  },
   "engines": {
     "node": ">=18"
   },
