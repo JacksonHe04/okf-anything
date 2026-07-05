@@ -71,8 +71,8 @@ Field mapping for Lark is symmetric (`lark_id`, `lark_parent_type`, etc.).
 
 ## References
 
-- Design notes: `docs/okf-anything/design.md` (also mirrored under
-  `.agents/docs/`).
+- Design notes live in `.agents/docs/` (private to your machine,
+  not committed).
 - Notion PAT: https://developers.notion.com/guides/get-started/personal-access-tokens
 
 ## Rules
