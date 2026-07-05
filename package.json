@@ -5,7 +5,7 @@
   "type": "module",
   "main": "./dist/cli.js",
   "bin": {
-    "okfa": "./bin/okfa"
+    "okfa": "bin/okfa"
   },
   "files": [
     "dist",
@@ -38,7 +38,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/JacksonHe04/okf-anything.git"
+    "url": "git+https://github.com/JacksonHe04/okf-anything.git"
   },
   "homepage": "https://github.com/JacksonHe04/okf-anything#readme",
   "bugs": {
