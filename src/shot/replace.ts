@@ -6,10 +6,16 @@
  * Frontmatter: by exact key (string / array).
  *
  * Dry-run by default; pass --apply to actually write.
+ *
+ * `inon_id` invariant: on any --apply write, every file ends up with an
+ * `inon_id` in its frontmatter. Backfill is idempotent — existing
+ * `inon_id` is preserved; missing values are minted via
+ * `utils/id.ts`. Dry-run never writes, so it never mints.
  */
 import * as fs from "fs";
-import YAML from "yaml";
 import { iterMdFiles, type ShotFile } from "./walk.js";
+import { ensureInonId, mintInonId } from "../utils/id.js";
+import { parseFrontmatter, writeFrontmatterBody } from "../utils/frontmatter.js";
 import type { LoadedConfig } from "../config/loader.js";
 
 export interface ReplaceBodyOptions {
@@ -39,20 +45,18 @@ export async function replaceBody(
   opts: ReplaceBodyOptions,
   apply: boolean,
 ): Promise<ReplaceReport> {
-  const re = opts.regex
-    ? new RegExp(opts.pattern, "g")
-    : null;
+  const re = opts.regex ? new RegExp(opts.pattern, "g") : null;
   const rep: ReplaceReport = { modified: 0, inspected: 0, skipped: 0 };
 
   for await (const f of iterMdFiles(cfg)) {
     rep.inspected++;
     const raw = await fs.promises.readFile(f.absPath, "utf8");
-    const fmMatch = raw.match(/^---\s*\n([\s\S]*?)\n---\n?/);
-    let body = fmMatch ? raw.slice(fmMatch[0].length) : raw;
+    const { frontmatter: existingFm, body: parsedBody } = parseFrontmatter(raw);
+
     const bodyChanged = re
-      ? body.replace(re, opts.replacement)
-      : body.split(opts.pattern).join(opts.replacement);
-    if (body === bodyChanged) {
+      ? parsedBody.replace(re, opts.replacement)
+      : parsedBody.split(opts.pattern).join(opts.replacement);
+    if (parsedBody === bodyChanged) {
       rep.skipped++;
       continue;
     }
@@ -60,9 +64,16 @@ export async function replaceBody(
       rep.modified++;
       continue;
     }
-    const fm = fmMatch ? raw.slice(fmMatch[0].length - (fmMatch[0].endsWith("\n") ? 1 : 0), fmMatch[0].length - (fmMatch[0].endsWith("\n") ? 0 : 0)) : "";
-    const patched = (fmMatch ? fmMatch[0] : "") + (bodyChanged.startsWith("\n") ? bodyChanged.slice(1) : "\n" + bodyChanged);
-    await fs.promises.writeFile(f.absPath, patched, "utf8");
+
+    // Apply path. Pick the frontmatter to write:
+    //   - existing → keep + ensureInonId (preserves any other fields)
+    //   - none    → mint a minimal frontmatter so the file carries its
+    //               `inon_id`. This is required by the workspace
+    //               invariant ("every doc must have an inon_id").
+    const fm: Record<string, unknown> = existingFm ?? { inon_id: mintInonId() };
+    if (existingFm) ensureInonId(existingFm);
+    const rebuilt = writeFrontmatterBody(fm, bodyChanged);
+    await fs.promises.writeFile(f.absPath, rebuilt, "utf8");
     rep.modified++;
   }
   return rep;
@@ -103,15 +114,12 @@ export async function replaceFrontmatter(
       continue;
     }
     f.frontmatter[opts.field] = next;
+    // Backfill `inon_id` (or preserve existing) before write.
+    ensureInonId(f.frontmatter);
+
     const raw = await fs.promises.readFile(f.absPath, "utf8");
-    const fmMatch = raw.match(/^---\s*\n([\s\S]*?)\n---/);
-    const newFm = YAML.stringify(f.frontmatter).trimEnd();
-    let rebuilt: string;
-    if (fmMatch) {
-      rebuilt = `---\n${newFm}\n---\n` + raw.slice(fmMatch[0].length);
-    } else {
-      rebuilt = `---\n${newFm}\n---\n` + raw;
-    }
+    const { body: parsedBody } = parseFrontmatter(raw);
+    const rebuilt = writeFrontmatterBody(f.frontmatter, parsedBody);
     await fs.promises.writeFile(f.absPath, rebuilt, "utf8");
     rep.modified++;
   }
