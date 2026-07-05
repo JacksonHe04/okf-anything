@@ -1,6 +1,6 @@
 /**
  * Notion SDK initialization. Token is supplied by the syncer (which in
- * turn resolves it from `.mookf/config.yaml` or env).
+ * turn resolves it from `.okfe/config.yaml` or env).
  */
 import { Client } from "@notionhq/client";
 
@@ -12,7 +12,7 @@ export interface NotionContext {
 export function createNotionClient(token: string): NotionContext {
   if (!token) {
     throw new Error(
-      "Notion token is missing. Set notion.token in .mookf/config.yaml or NOTION_TOKEN env.",
+      "Notion token is missing. Set notion.token in .okfe/config.yaml or NOTION_TOKEN env.",
     );
   }
   const client = new Client({

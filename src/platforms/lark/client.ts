@@ -2,7 +2,7 @@
  * Lark Open Platform API wrapper for docs / wiki.
  *
  * Lark's docs surface lives under multiple sub-APIs (docx, wiki, sheet, ...).
- * mookf v1 keeps the surface narrow: pull docs & wiki nodes referenced by id,
+ * okf-everything v1 keeps the surface narrow: pull docs & wiki nodes referenced by id,
  * with `last_edited_time`-anchored incremental sync.
  *
  * Auth: tenant_access_token obtained via app_id + app_secret.

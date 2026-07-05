@@ -1,5 +1,5 @@
-// Flatten dist/src/* up to dist/* so the bin shim at dist/mookf (and
-// dist/bin/mookf if present) can resolve dist/cli.js directly.
+// Flatten dist/src/* up to dist/* so the bin shim at dist/okfe (and
+// dist/bin/okfe if present) can resolve dist/cli.js directly.
 //
 // Also re-exec the bin shim into dist/ when it's only at the repo root
 // bin/, so the npm tarball works whether the package is published

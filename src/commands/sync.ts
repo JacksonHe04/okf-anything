@@ -1,5 +1,5 @@
 /**
- * `mookf sync <platform> [--root <uuid>] [--dry-run]`
+ * `okfe sync <platform> [--root <uuid>] [--dry-run]`
  *
  * Dispatch to the platform-specific syncer.
  */
@@ -25,7 +25,7 @@ export async function cmdSync(argv: string[]): Promise<number> {
 
   const cfg = loadConfig();
   if (!cfg) {
-    console.error("✗ no workspace found. Run `mookf init` first.");
+    console.error("✗ no workspace found. Run `okfe init` first.");
     return 1;
   }
   const platformCfg = cfg.config[platform];
@@ -36,7 +36,7 @@ export async function cmdSync(argv: string[]): Promise<number> {
 
   if (!token || (platform === "notion" && !token.startsWith("ntn_") && token.length < 20)) {
     console.error(
-      `✗ missing or invalid ${platform} credentials. Set ${platform}.token in .mookf/config.yaml or env.`,
+      `✗ missing or invalid ${platform} credentials. Set ${platform}.token in .okfe/config.yaml or env.`,
     );
     return 1;
   }
@@ -68,7 +68,7 @@ export async function cmdSync(argv: string[]): Promise<number> {
 }
 
 export function explainSync(): string {
-  return `Usage: mookf sync <notion|lark> [--root <uuid>] [--dry-run]
+  return `Usage: okfe sync <notion|lark> [--root <uuid>] [--dry-run]
 
   Incremental pull + update from the cloud workspace into <root>/<platform>/.
 

@@ -1,16 +1,49 @@
 {
-  "name": "mookr-monorepo",
+  "name": "@inon-ai/okf-everything",
   "version": "0.1.0",
-  "private": true,
-  "description": "mookf — escape Notion / Lark, sync into a local OKF Markdown knowledge base. CLI for humans & Claude Code.",
-  "scripts": {
-    "build": "pnpm --filter @mookf/cli build",
-    "typecheck": "pnpm --filter @mookf/cli typecheck",
-    "start": "pnpm --filter @mookf/cli start",
-    "clean": "pnpm --filter @mookf/cli clean"
+  "description": "okf-everything — escape Notion / Lark, sync into a local OKF Markdown knowledge base. CLI for humans & Claude Code.",
+  "type": "module",
+  "main": "./dist/cli.js",
+  "bin": {
+    "okfe": "./bin/okfe"
   },
+  "files": [
+    "dist",
+    "bin",
+    "skills",
+    "templates",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node bin/build-helper.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "tsx src/cli.ts",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "okf-everything",
+    "okf",
+    "notion",
+    "lark",
+    "sync",
+    "knowledge-base",
+    "markdown",
+    "claude-code"
+  ],
+  "license": "MIT",
   "engines": {
     "node": ">=18"
   },
-  "packageManager": "pnpm@9.0.0"
+  "dependencies": {
+    "@notionhq/client": "^5.22.0",
+    "ignore": "^6.0.2",
+    "p-queue": "^8.0.1",
+    "yaml": "^2.6.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.0"
+  }
 }

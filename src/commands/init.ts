@@ -1,7 +1,7 @@
 /**
- * `mookf init` — bootstrap a workspace.
+ * `okfe init` — bootstrap a workspace.
  *
- * Creates `<dir>/.mookf/config.yaml` with sane defaults, prints next steps.
+ * Creates `<dir>/.okfe/config.yaml` with sane defaults, prints next steps.
  * If `dir` is omitted, defaults to `~/iNon`.
  */
 import * as fs from "fs";
@@ -23,14 +23,14 @@ export function cmdInit(argv: string[]): number {
   console.log("");
   console.log("Next:");
   console.log(`  1. Edit ${configPath} and set notion.state.default_root_id / lark.* as needed.`);
-  console.log(`  2. Run: mookf sync notion --root <uuid>`);
+  console.log(`  2. Run: okfe sync notion --root <uuid>`);
   return 0;
 }
 
 export function explainInit(): string {
-  return `Usage: mookf init [<dir>]
+  return `Usage: okfe init [<dir>]
 
-Bootstrap a workspace. Creates <dir>/.mookf/config.yaml.
+Bootstrap a workspace. Creates <dir>/.okfe/config.yaml.
 Default <dir>: ~/iNon`;
 }
 

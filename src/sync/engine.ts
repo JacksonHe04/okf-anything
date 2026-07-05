@@ -1,5 +1,5 @@
 /**
- * mookf sync engine.
+ * okfe sync engine.
  *
  * Goals (per the 2026-07-05 rebrand decision #2 & #9):
  *   - UUID-anchored: each cloud doc has a stable UUID written into

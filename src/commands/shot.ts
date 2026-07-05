@@ -1,5 +1,5 @@
 /**
- * `mookf shot <sub> ...`
+ * `okfe shot <sub> ...`
  *
  * Subcommands:
  *   find     --field <k> [--eq <v>] [--contains] [--regex]
@@ -24,7 +24,7 @@ export async function cmdShot(argv: string[]): Promise<number> {
 
   const cfg = loadConfig();
   if (!cfg) {
-    console.error("✗ no workspace found. Run `mookf init` first.");
+    console.error("✗ no workspace found. Run `okfe init` first.");
     return 1;
   }
 
@@ -65,7 +65,7 @@ async function runFind(
   const regex = argv.includes("--regex");
 
   if (!field) {
-    console.error("Usage: mookf shot find <field> [--eq <v>] [--contains] [--regex]");
+    console.error("Usage: okfe shot find <field> [--eq <v>] [--contains] [--regex]");
     return 2;
   }
 
@@ -83,7 +83,7 @@ async function runSearch(
 ): Promise<number> {
   const query = argv[0];
   if (!query) {
-    console.error("Usage: mookf shot search <query> [--regex] [--ignore-case] [--files-only] [--limit N]");
+    console.error("Usage: okfe shot search <query> [--regex] [--ignore-case] [--files-only] [--limit N]");
     return 2;
   }
   const limit = parseFlagValue(argv, "--limit");
@@ -117,7 +117,7 @@ async function runReplace(
 
   if (field) {
     if (!toValue && !fromValue) {
-      console.error("Usage: mookf shot replace --field <k> [--from <v>] --to <v> [--match <v>] [--in-string] [--apply]");
+      console.error("Usage: okfe shot replace --field <k> [--from <v>] --to <v> [--match <v>] [--in-string] [--apply]");
       return 2;
     }
     const report = await replaceFrontmatter(
@@ -129,7 +129,7 @@ async function runReplace(
     return 0;
   }
   if (!pattern) {
-    console.error("Usage: mookf shot replace --pattern <p> --to <v> [--regex] [--apply]");
+    console.error("Usage: okfe shot replace --pattern <p> --to <v> [--regex] [--apply]");
     return 2;
   }
   const report = await replaceBody(
@@ -142,7 +142,7 @@ async function runReplace(
 }
 
 export function explainShot(): string {
-  return `Usage: mookf shot <ls|find|search|replace> [...]
+  return `Usage: okfe shot <ls|find|search|replace> [...]
 
   ls                        List all .md files in the workspace.
   find <field> [--eq <v>]   Match files by frontmatter field value.

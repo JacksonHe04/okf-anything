@@ -27,7 +27,7 @@ if (existsSync(distEntry)) {
       cwd: pkgDir,
     });
   } catch (err) {
-    console.error("mookf: no built dist and no tsx available. Run `pnpm build` first.");
+    console.error("okfe: no built dist and no tsx available. Run `pnpm build` first.");
     process.exit(1);
   }
 }

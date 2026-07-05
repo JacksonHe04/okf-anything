@@ -4,7 +4,7 @@
  * - Patterns follow the npm `ignore` package syntax (a superset of gitignore).
  * - Sources, in priority order (later ones appended):
  *     1. config.yaml `ignore:` list
- *     2. <root>/.mookfignore
+ *     2. <root>/.okfeignore
  * - All paths are matched relative to `root` and forward-slashed.
  */
 import * as fs from "fs";
@@ -25,9 +25,9 @@ function makeIgnore(): Ignore {
   if (typeof mod.default === "function") return mod.default();
   throw new Error("ignore: module has no callable export");
 }
-import type { MookfConfig } from "../config/schema.js";
+import type { OkfEverythingConfig } from "../config/schema.js";
 
-const MOOKF_IGNORE_FILENAME = ".mookfignore";
+const OKFE_IGNORE_FILENAME = ".okfeignore";
 
 export class IgnoreMatcher {
   private readonly ig: Ignore;
@@ -65,10 +65,10 @@ export class IgnoreMatcher {
     });
   }
 
-  /** Build the matcher from a loaded mookf config (also reads .mookfignore). */
-  static fromConfig(root: string, cfg: MookfConfig): IgnoreMatcher {
+  /** Build the matcher from a loaded okfe config (also reads .okfeignore). */
+  static fromConfig(root: string, cfg: OkfEverythingConfig): IgnoreMatcher {
     const patterns: string[] = [...cfg.ignore];
-    const dotIgnore = path.join(root, MOOKF_IGNORE_FILENAME);
+    const dotIgnore = path.join(root, OKFE_IGNORE_FILENAME);
     if (fs.existsSync(dotIgnore)) {
       patterns.push(...readIgnoreFile(dotIgnore));
     }

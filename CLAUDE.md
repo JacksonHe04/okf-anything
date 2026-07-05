@@ -1,20 +1,20 @@
-# mookf
+# okf-everything
 
 > **MO** + **O** + **K** + **F**ormat. The original product intent — escape
 > centralized cloud knowledge bases — has not changed. What changed in the
 > 2026-07 rebrand: name, scope, and architecture.
 
-## What mookf is
+## What okf-everything is
 
-mookf pulls and incrementally syncs **Notion** (and **Lark / Feishu**,
+okf-everything pulls and incrementally syncs **Notion** (and **Lark / Feishu**,
 stub for v1) into a local **OKF (Open Knowledge Format)** Markdown
 workspace. By default the workspace lives at `~/iNon`. You can change it
-in `.mookf/config.yaml`.
+in `.okfe/config.yaml`.
 
 Compared to the old `iMon` line:
 
-- No web page, no app, no editor UI in scope. mookf is just a CLI
-  (`mookf`) and Claude Code Skills.
+- No web page, no app, no editor UI in scope. okf-everything is just a CLI
+  (`okfe`) and Claude Code Skills.
 - Sync and pull are **the same operation**; pull is just sync with an
   empty local.
 - Three UUID spaces coexist on disk: `notion_id`, `lark_id`, plus the
@@ -26,14 +26,21 @@ Compared to the old `iMon` line:
 ## Repo layout
 
 ```
-mookr/                            ← repo root (this file lives here)
-├── mookf/                        ← the CLI source (npm package @mookf/cli)
-│   ├── bin/mookf
-│   ├── src/{cli.ts, commands/, config/, ignore/, okf/, shot/, sync/, utils/, platforms/{notion,lark}}
-│   ├── skills/{mookf-init, mookf-sync-notion, mookf-sync-lark, mookf-shot}/SKILL.md
-│   └── templates/cron-schedule.md
-├── docs/                         ← design / decision records (root-level)
-└── bye-bye-*/                    ← legacy (absorbed by mookf/, slated for removal)
+okf-everything/                            ← repo root (this file lives here)
+├── src/                          ← CLI source (TS)
+│   ├── cli.ts                    ← entry
+│   ├── commands/{init,config,sync,shot}.ts
+│   ├── config/                   ← .okfe/config.yaml loader + zod schema
+│   ├── ignore/                   ← gitignore-style matcher
+│   ├── shot/                     ← moonshot: ls / find / search / replace
+│   ├── sync/                     ← generic engine (UUID + last_edited_time)
+│   ├── platforms/{notion,lark}/  ← per-platform adapters
+│   └── utils/                    ← shared helpers
+├── bin/okfe                     ← executable shim
+├── skills/{okfe-init, okfe-sync-notion, okfe-sync-lark, okfe-shot}/SKILL.md
+├── templates/cron-schedule.md    ← recipe for scheduled syncs
+├── docs/                         ← design / decision records
+└── dist/                         ← build output (gitignored)
 ```
 
 ## Field mapping (Notion → OKF)
@@ -64,7 +71,8 @@ Field mapping for Lark is symmetric (`lark_id`, `lark_parent_type`, etc.).
 
 ## References
 
-- Google OKF: see `mookf/docs/design.md`.
+- Design notes: `docs/okf-everything/design.md` (also mirrored under
+  `.agents/docs/`).
 - Notion PAT: https://developers.notion.com/guides/get-started/personal-access-tokens
 
 ## Rules
@@ -75,6 +83,8 @@ Field mapping for Lark is symmetric (`lark_id`, `lark_parent_type`, etc.).
 - Do not commit personal information (tokens, Notion UUIDs of private
   docs).
 - Commit style: see `.agents/skills/git-commit/SKILL.md` (when present).
-- Plans / decisions / reports produced during development go in `docs/`.
-- For development, the canonical entry is `mookf/`. Use
-  `cd mookf && pnpm install && pnpm run build` to refresh `dist/`.
+- Plans / decisions / reports produced during development go in
+  `.agents/docs/` (NOT in `docs/` — design artifacts are kept private
+  to your own machine).
+- For development, the canonical entry is the repo root. Use
+  `pnpm install && pnpm run build` to refresh `dist/`.

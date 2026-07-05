@@ -1,22 +1,22 @@
 /**
- * Locate and load the `<root>/.mookf/config.yaml` for the current workspace.
+ * Locate and load the `<root>/.okfe/config.yaml` for the current workspace.
  *
  * Search order:
  *   1. explicit --config flag
- *   2. walking up from cwd until a `.mookf/config.yaml` is found
- *   3. fallback to `~/iNon/.mookf/config.yaml` if it exists
+ *   2. walking up from cwd until a `.okfe/config.yaml` is found
+ *   3. fallback to `~/iNon/.okfe/config.yaml` if it exists
  *
- * If `process.env.MOOKF_CONFIG` is set, that path wins.
+ * If `process.env.OKFE_CONFIG` is set, that path wins.
  */
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import YAML from "yaml";
-import { MookfConfigSchema, DEFAULT_CONFIG, type MookfConfig } from "./schema.js";
+import { OkfEverythingConfigSchema, DEFAULT_CONFIG, type OkfEverythingConfig } from "./schema.js";
 
 export interface LoadedConfig {
-  config: MookfConfig;
-  /** Absolute path to the workspace root (where `.mookf/` lives). */
+  config: OkfEverythingConfig;
+  /** Absolute path to the workspace root (where `.okf-everything/` lives). */
   root: string;
   /** Absolute path to the YAML file. */
   configPath: string;
@@ -32,7 +32,7 @@ export interface LocateOptions {
 }
 
 const CONFIG_FILENAME = "config.yaml";
-const CONFIG_DIRNAME = ".mookf";
+const CONFIG_DIRNAME = ".okfe";
 const HOME_DEFAULT = path.join(os.homedir(), "iNon");
 
 function expandHome(p: string): string {
@@ -45,7 +45,7 @@ function expandHome(p: string): string {
 }
 
 export function locateConfigPath(opts: LocateOptions = {}): string | null {
-  const override = process.env.MOOKF_CONFIG ?? opts.configPath;
+  const override = process.env.OKFE_CONFIG ?? opts.configPath;
   if (override) {
     return path.resolve(expandHome(override));
   }
@@ -70,7 +70,7 @@ export function loadConfig(opts: LocateOptions = {}): LoadedConfig | null {
 
   const raw = fs.readFileSync(configPath, "utf8");
   const parsed = YAML.parse(raw) ?? {};
-  const validated = MookfConfigSchema.parse({
+  const validated = OkfEverythingConfigSchema.parse({
     ...DEFAULT_CONFIG,
     ...parsed,
   });
@@ -85,7 +85,7 @@ export function loadConfig(opts: LocateOptions = {}): LoadedConfig | null {
 
 export function writeConfig(
   root: string,
-  config: MookfConfig,
+  config: OkfEverythingConfig,
 ): string {
   const dir = path.join(root, CONFIG_DIRNAME);
   fs.mkdirSync(dir, { recursive: true });
