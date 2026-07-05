@@ -1,47 +1,80 @@
-# Leave the Moon
+# mookf
 
-我要离开 Notion。
+> **MO** + **O** + **K** + **F**ormat. The original product intent — escape
+> centralized cloud knowledge bases — has not changed. What changed in the
+> 2026-07 rebrand: name, scope, and architecture.
 
-我需要把我的个人 Notion 中的所有内容拉取到我的本地作为 markdown。保存的路劲为 ~/iNon/Wiki/
-需要有完整的读权限的 API 来获得文档信息、文档内容、文档父子关系等。通过在本地编写程序来实现对我的 Notion 的拉取。
-由于 Notion 存储了很多文档的信息，且存在父子关系，所以如何能在本地保留关键信息是重要的。
-本地的 markdown 群会更有利于与 AI Agent 协作、以及个人的备份和管理，而不是依赖于 Notion。
-Google 最近提出了 OKF 规范，可以理解为一个加强版的 Markdown，我还需要把 Notion 拉到本地的 markdown 群都符合这个标准。
+## What mookf is
 
-后续不会再使用 Notion，无需考虑同步和更新的问题。
+mookf pulls and incrementally syncs **Notion** (and **Lark / Feishu**,
+stub for v1) into a local **OKF (Open Knowledge Format)** Markdown
+workspace. By default the workspace lives at `~/iNon`. You can change it
+in `.mookf/config.yaml`.
 
-## 拉取操作
+Compared to the old `iMon` line:
 
-### 字段映射关系
+- No web page, no app, no editor UI in scope. mookf is just a CLI
+  (`mookf`) and Claude Code Skills.
+- Sync and pull are **the same operation**; pull is just sync with an
+  empty local.
+- Three UUID spaces coexist on disk: `notion_id`, `lark_id`, plus the
+  user's own project-internal ids. Together they are the idempotency key
+  for incremental sync.
+- The user can freely reorganize local files; sync follows UUIDs, not
+  paths.
 
-id -> notion_id
-title -> title
-url -> resource
-createdTime -> created_time
-lastEditedTime -> last_edited_time
-parentType -> notion_parent_type
-parentId -> notion_parent_id
+## Repo layout
 
-目录冲突风险：同一目录下，出现重复的文档/目录时候，用自增数字就行（后缀挂个-1这种）
+```
+mookr/                            ← repo root (this file lives here)
+├── mookf/                        ← the CLI source (npm package @mookf/cli)
+│   ├── bin/mookf
+│   ├── src/{cli.ts, commands/, config/, ignore/, okf/, shot/, sync/, utils/, platforms/{notion,lark}}
+│   ├── skills/{mookf-init, mookf-sync-notion, mookf-sync-lark, mookf-shot}/SKILL.md
+│   └── templates/cron-schedule.md
+├── docs/                         ← design / decision records (root-level)
+└── bye-bye-*/                    ← legacy (absorbed by mookf/, slated for removal)
+```
 
-### 拉取、检查与重试策略
+## Field mapping (Notion → OKF)
 
-- 既能及时的搞好一个保存一个，确保中断/阻塞/失败了也能保证任务最新进度；
-- 又能在 retry 整个长程任务的时候跳过已做好的（根据 notion_id 检查幂等性）
-- 最终 goal：Notion Search 的数目和本地拉取目录的 *.md 一致。
+| Notion             | OKF YAML              |
+|--------------------|-----------------------|
+| `id`               | `notion_id`           |
+| `title`            | `title`               |
+| `url`              | `resource`            |
+| `createdTime`      | `created_time`        |
+| `lastEditedTime`   | `last_edited_time` (and also `timestamp`) |
+| `parent.type`      | `notion_parent_type`  |
+| `parent.id`        | `notion_parent_id`    |
+| properties (except `title`) | flattened into `properties` |
 
----
+Field mapping for Lark is symmetric (`lark_id`, `lark_parent_type`, etc.).
+
+## Pull / sync / retry strategy
+
+- **Streaming writes**: each doc is on disk the moment it is rendered;
+  Ctrl-C partway leaves a consistent tree.
+- **UUID idempotency**: re-running sync skips nodes whose
+  `notion_id`/`lark_id` already exists in the workspace.
+- **Conflict resolver**: duplicate basenames under the same parent dir
+  gain `-1`, `-2`, ... suffixes.
+- **Forbidden operations**: never delete local files just because the
+  cloud side deleted them; never call Notion / Lark write APIs.
 
 ## References
 
-- Google OKF: https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing
-- Notion Personal Access Token: https://developers.notion.com/guides/get-started/personal-access-tokens
+- Google OKF: see `mookf/docs/design.md`.
+- Notion PAT: https://developers.notion.com/guides/get-started/personal-access-tokens
 
 ## Rules
 
-- 禁止要未经用户的情况下删除 Wiki/ 目录
-- 禁止对 Notion API 进行写操作  
-- 禁止提交 Personal 信息
-- Commit 规范（提交前必看）：.agents/skills/git-commit/SKILL.md
-- 开发过程中产出的计划、报告等文档，需要放在 .agents/docs/ 中。
-- 务必使用 ./moon-app/dev_setup.sh 来启动和重启网页端的开发服务
+- Do not delete `<root>/notion/` or `<root>/lark/` directories without
+  the user's explicit consent.
+- Do not call write APIs against Notion or Lark. The CLI only reads.
+- Do not commit personal information (tokens, Notion UUIDs of private
+  docs).
+- Commit style: see `.agents/skills/git-commit/SKILL.md` (when present).
+- Plans / decisions / reports produced during development go in `docs/`.
+- For development, the canonical entry is `mookf/`. Use
+  `cd mookf && pnpm install && pnpm run build` to refresh `dist/`.
