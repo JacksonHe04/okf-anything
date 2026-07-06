@@ -12,6 +12,7 @@ import { cmdInit, explainInit } from "./commands/init.js";
 import { cmdConfig, explainConfig } from "./commands/config.js";
 import { cmdSync, explainSync } from "./commands/sync.js";
 import { cmdShot, explainShot } from "./commands/shot.js";
+import { cmdLarkMigrate, explainLarkMigrate } from "./commands/lark-migrate.js";
 
 const argv = process.argv.slice(2);
 
@@ -33,6 +34,8 @@ async function main(): Promise<number> {
         return await cmdSync(rest);
       case "shot":
         return await cmdShot(rest);
+      case "lark":
+        return await cmdLark(rest);
       case "version":
       case "-v":
       case "--version":
@@ -50,6 +53,36 @@ async function main(): Promise<number> {
     console.error("✗ fatal:", err instanceof Error ? err.message : err);
     return 1;
   }
+}
+
+/** `okfa lark <subcommand>` dispatcher. */
+async function cmdLark(argv: string[]): Promise<number> {
+  const sub = argv[0];
+  const rest = argv.slice(1);
+  if (!sub || sub === "--help" || sub === "-h") {
+    console.log(explainLark());
+    return 0;
+  }
+  switch (sub) {
+    case "migrate-frontmatter":
+      return cmdLarkMigrate(rest);
+    default:
+      console.error(`unknown lark subcommand: ${sub}`);
+      console.error(explainLark());
+      return 2;
+  }
+}
+
+function explainLark(): string {
+  return `Usage: okfa lark <subcommand>
+
+Subcommands:
+  migrate-frontmatter [--apply]   One-shot rewrite of legacy Lark
+                                  frontmatter to the canonical field
+                                  names (lark_id, lark_parent_id,
+                                  lark_parent_type). Dry-run by default.
+
+${explainLarkMigrate()}`;
 }
 
 main().then(

@@ -1,7 +1,15 @@
 /**
- * `okfa sync <platform> [--root <uuid>] [--dry-run]`
+ * `okfa sync <platform> [--root <spec>] [--dry-run]`
  *
  * Dispatch to the platform-specific syncer.
+ *
+ * For Lark, `--root` accepts:
+ *   - a single space alias (`my_library`)
+ *   - a numeric `space_id`
+ *   - a comma-separated list of any of the above
+ *   - a Lark URL containing one of the above
+ *
+ * For Notion, `--root` is still parsed as a UUID (existing behavior).
  */
 import { loadConfig } from "../config/loader.js";
 import { syncAll } from "../sync/dispatcher.js";
@@ -35,26 +43,31 @@ export async function cmdSync(argv: string[]): Promise<number> {
   }
 
   if (!token || (platform === "notion" && !token.startsWith("ntn_") && token.length < 20)) {
-    console.error(
-      `✗ missing or invalid ${platform} credentials. Set ${platform}.token in .okfa/config.yaml or env.`,
-    );
-    return 1;
+    // For lark we no longer require appId/appSecret to be in config —
+    // lark-cli owns auth. Only fail loudly for Notion where the PAT
+    // is mandatory.
+    if (platform === "notion") {
+      console.error(
+        `✗ missing or invalid ${platform} credentials. Set ${platform}.token in .okfa/config.yaml or env.`,
+      );
+      return 1;
+    }
   }
 
   let syncer;
   if (platform === "notion") {
-    syncer = new NotionSyncer(token);
+    syncer = new NotionSyncer(token ?? "");
   } else {
-    const [appId, appSecret] = String(token).split(":");
-    syncer = new LarkSyncer({
-      baseUrl: "https://open.feishu.cn",
-      appId: appId ?? "",
-      appSecret: appSecret ?? "",
-    });
+    // Lark auth is delegated to `lark-cli`; ignore token.
+    syncer = new LarkSyncer();
   }
 
   const rootOverrideRaw = parseFlagValue(flags, "--root") ?? parseFlagValue(flags, "-r");
-  const rootOverride = rootOverrideRaw ? extractUuid(rootOverrideRaw) : undefined;
+  const rootOverride = rootOverrideRaw
+    ? platform === "notion"
+      ? extractUuid(rootOverrideRaw)
+      : parseLarkRootSpec(rootOverrideRaw)
+    : undefined;
   const dryRun = flags.includes("--dry-run");
 
   const result = await syncAll(syncer, cfg, { rootOverride, dryRun });
@@ -67,11 +80,27 @@ export async function cmdSync(argv: string[]): Promise<number> {
   return result.failed > 0 ? 1 : 0;
 }
 
+/**
+ * Normalize a `--root` value for Lark. Accepts a single spec or a
+ * comma-separated list. Each entry is trimmed; URLs are kept verbatim
+ * (the syncer handles URL detection). Empty entries are dropped.
+ */
+function parseLarkRootSpec(raw: string): string {
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(",");
+}
+
 export function explainSync(): string {
-  return `Usage: okfa sync <notion|lark> [--root <uuid>] [--dry-run]
+  return `Usage: okfa sync <notion|lark> [--root <spec>] [--dry-run]
 
   Incremental pull + update from the cloud workspace into <root>/<platform>/.
 
-  --root <uuid>   Override the configured root page id for this run.
+  --root <spec>   Override the configured root id for this run.
+                  Notion: a single UUID.
+                  Lark:   a single space spec (my_library | space_id | URL)
+                          or a comma-separated list of any of those.
   --dry-run       Show what would happen without writing.`;
 }
