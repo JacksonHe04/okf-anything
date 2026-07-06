@@ -1,25 +1,102 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+:root,
+html[data-theme="light"] {
+  --background: #fbf9f4;
+  --foreground: #1c1917;
+  --card: #f5f2e9;
+  --card-foreground: #1c1917;
+  --border: #e7e2d3;
+  --primary: #c2410c;
+  --primary-foreground: #fffbeb;
+  --accent: #d97706;
+  --muted: #78716c;
+  --paper-grid: rgba(28, 25, 23, 0.04);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+html[data-theme="dark"] {
+  --background: #09090b;
+  --foreground: #f4f4f5;
+  --card: #18181b;
+  --card-foreground: #f4f4f5;
+  --border: #27272a;
+  --primary: #f97316;
+  --primary-foreground: #09090b;
+  --accent: #fbbf24;
+  --muted: #a1a1aa;
+  --paper-grid: rgba(255, 255, 255, 0.04);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@media (prefers-color-scheme: light) {
+  html[data-theme="system"] {
+    --background: #fbf9f4;
+    --foreground: #1c1917;
+    --card: #f5f2e9;
+    --card-foreground: #1c1917;
+    --border: #e7e2d3;
+    --primary: #c2410c;
+    --primary-foreground: #fffbeb;
+    --accent: #d97706;
+    --muted: #78716c;
+    --paper-grid: rgba(28, 25, 23, 0.04);
   }
 }
 
+@media (prefers-color-scheme: dark) {
+  html[data-theme="system"] {
+    --background: #09090b;
+    --foreground: #f4f4f5;
+    --card: #18181b;
+    --card-foreground: #f4f4f5;
+    --border: #27272a;
+    --primary: #f97316;
+    --primary-foreground: #09090b;
+    --accent: #fbbf24;
+    --muted: #a1a1aa;
+    --paper-grid: rgba(255, 255, 255, 0.04);
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   min-height: 100vh;
+  transition: background-color 0.3s ease, color 0.3s ease;
+  overflow-x: hidden;
+}
+
+/* Custom Paper Dot Grid */
+.bg-dot-grid {
+  background-image: radial-gradient(var(--paper-grid) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+/* Selection */
+::selection {
+  background-color: rgba(234, 88, 12, 0.25);
+  color: inherit;
 }
