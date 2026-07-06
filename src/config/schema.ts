@@ -20,7 +20,11 @@ export const IgnoreRuleSchema = z.object({
 export const PlatformStateSchema = z.object({
   /** ISO timestamp of the last successful incremental sync. */
   last_sync_time: z.string().optional(),
-  /** Optional default Notion / Lark top-level page id (UUID) used when no flag is passed. */
+  /**
+   * Optional Lark-specific default root spec. For Lark this is a
+   * comma-separated list of wiki space IDs (e.g. `my_library` or a
+   * real numeric `space_id`). Notion continues to use a single UUID.
+   */
   default_root_id: z.string().optional(),
 });
 export type PlatformState = z.infer<typeof PlatformStateSchema>;
@@ -43,8 +47,13 @@ export const ShotConfigSchema = z.object({
 });
 
 export const SyncConfigSchema = z.object({
-  /** Default path templates. `${platform}` will be replaced with "notion" / "lark". */
-  pathTemplate: z.string().optional().default("${platform}"),
+  /**
+   * Default path templates. `${platform}` will be replaced with
+   * "notion" / "lark". The default `Wiki/lark` lands Lark docs under
+   * `<root>/Wiki/lark/...`; set explicitly to `${platform}` to revert
+   * to `<root>/lark/...`.
+   */
+  pathTemplate: z.string().optional().default("Wiki/lark"),
   /** Override default Notion / Lark top-level page id (UUID) used when no flag is passed. */
   defaultRootId: z.string().optional(),
 });
@@ -64,5 +73,5 @@ export const DEFAULT_CONFIG: OkfAnythingConfig = {
   schema_version: 1,
   ignore: [],
   shot: { ignore: [], maxFrontmatterBytes: 1_048_576 },
-  sync: { pathTemplate: "${platform}" },
+  sync: { pathTemplate: "Wiki/lark" },
 };

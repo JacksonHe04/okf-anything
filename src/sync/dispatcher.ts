@@ -13,6 +13,23 @@ import { diff } from "./engine.js";
 import type { PlatformSyncer, SyncResult } from "./types.js";
 import type { LoadedConfig } from "../config/loader.js";
 
+/**
+ * Resolve the per-platform base directory.
+ *
+ * - When `sync.pathTemplate` is the literal `${platform}`, every
+ *   platform lands at `<root>/<platform>` (legacy behavior).
+ * - When it's any other value, Lark honors it (e.g. `Wiki/lark` →
+ *   `<root>/Wiki/lark`). Notion is unaffected to preserve existing
+ *   workspaces.
+ */
+function resolvePlatformDir(config: LoadedConfig, platform: "notion" | "lark"): string {
+  const tpl = config.config.sync?.pathTemplate ?? "${platform}";
+  if (platform === "lark" && tpl !== "${platform}") {
+    return path.join(config.root, tpl);
+  }
+  return path.join(config.root, platform);
+}
+
 export async function syncAll(
   syncer: PlatformSyncer,
   config: LoadedConfig,
@@ -34,7 +51,7 @@ export async function syncAll(
   };
 
   // Tracks allocator state across writes.
-  const platformDir = path.join(config.root, syncer.platform);
+  const platformDir = resolvePlatformDir(config, syncer.platform);
 
   for (const action of actions) {
     try {
