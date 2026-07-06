@@ -1,6 +1,6 @@
 {
   "name": "@inon-ai/okf-anything",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "okf-anything — escape Notion / Lark, sync into a local OKF Markdown knowledge base. CLI for humans & Claude Code.",
   "type": "module",
   "main": "./dist/cli.js",
