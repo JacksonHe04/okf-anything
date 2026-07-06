@@ -39,7 +39,15 @@ export async function syncAll(
   const cloud = await syncer.listCloud({ config, rootOverride: opts.rootOverride });
   const local = await syncer.loadLocal({ config });
 
-  const actions = diff({ cloud, local });
+  // When the syncer opts in to full-resync mode, bump every cloud item's
+  // lastEditedTime to "now" so the diff below emits `update` (not `skip`)
+  // for every doc. We pick `Date.now()` over a sentinel because it keeps
+  // the diff semantics identical to a genuine fresh edit.
+  const effectiveCloud = syncer.fullResync
+    ? cloud.map((item) => ({ ...item, lastEditedTime: new Date().toISOString() }))
+    : cloud;
+
+  const actions = diff({ cloud: effectiveCloud, local });
 
   const result: SyncResult = {
     scanned: cloud.length,

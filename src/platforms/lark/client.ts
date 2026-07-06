@@ -36,6 +36,8 @@ export interface WikiNode {
   obj_create_time?: string;
   node_create_time?: string;
   updated_at?: string;
+  /** Syncer-private annotation: human name from `+space-list`. */
+  space_name_hint?: string | null;
 }
 
 /** A wiki space as returned by `wiki +space-list`. */

@@ -34,8 +34,86 @@ import {
   type LarkOkfFields,
 } from "./convert.js";
 
+/**
+ * Sentinel: when the user doesn't pin a space list and doesn't pass
+ * `--root`, syncer expands this to "every space the user can see".
+ */
+const ALL_SPACES_SENTINEL = "*";
+
+/**
+ * Build the path-from-root segments for a node, walking up the
+ * parent chain in the in-memory `tree`. Cycle-guard via a visited
+ * set so a malformed parent loop doesn't hang.
+ *
+ * The returned list is *titles* (already sanitized at write time by
+ * `sanitizeFileName`), not raw node_tokens, because the on-disk path
+ * is title-based. Each segment is the directory name the parent
+ * node should occupy.
+ */
+function computePathSegmentsFor(
+  node: WikiNode,
+  tree: Map<string, WikiNode>,
+): string[] {
+  const segments: string[] = [];
+  const seen = new Set<string>();
+  let cur: WikiNode | undefined = node;
+  while (cur) {
+    if (seen.has(cur.node_token)) break;
+    seen.add(cur.node_token);
+    segments.unshift(sanitizeFileNameLocal(cur.title || "untitled"));
+    const parentToken = cur.parent_node_token;
+    if (!parentToken) break;
+    cur = tree.get(parentToken);
+  }
+  return segments;
+}
+
+/** Depth for sort-ordering: shorter path first so parents land first. */
+function pathDepth(item: CloudItem): number {
+  const segs = item.extras?.path_segments as string[] | undefined;
+  return segs ? segs.length : 1;
+}
+
+/** Local thin wrapper so we don't pollute the import list at the top. */
+function sanitizeFileNameLocal(name: string): string {
+  // Mirrors utils/sanitize.ts:sanitizeFileName. Inlined here to keep
+  // the BFS helper free of cross-module imports.
+  if (!name) return "untitled";
+  const cleaned = name.replace(/[\\\/\?%\*\:\|"<>]/g, " ").trim();
+  return cleaned.length === 0 ? "untitled" : cleaned;
+}
+
+/**
+ * Resolve the top-level subdirectory for a wiki space. The contract:
+ *   - my_library → `["my-library"]`
+ *   - any other (numeric) space_id → `["wiki", <space-slug>]`
+ *
+ * The space slug is the human-readable name (when we have one) or
+ * `lark-<id-prefix>` as fallback — same logic as `convert.spaceSlug`.
+ */
+function resolveTopSubdir(spaceId: string | null, spaceName: string | null): string[] {
+  // The personal library: detected either by the raw alias or by the
+  // human name we hard-code for it in listCloud ("my-library").
+  if (spaceId === "my_library" || spaceName === "my-library") return ["my-library"];
+  if (spaceName) return ["wiki", normalizeSlug(spaceName)];
+  return ["wiki", `lark-${(spaceId ?? "").slice(0, 6)}`];
+}
+
+/** Same normalization as `convert.normalizeSlug` — kept inline so the
+ *  syncer doesn't import convert just for one helper. */
+function normalizeSlug(label: string): string {
+  return label
+    .trim()
+    .replace(/[\s·/\\:?*"<>|]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase() || "unscoped";
+}
+
 export class LarkSyncer implements PlatformSyncer {
   readonly platform = "lark" as const;
+  /** Every run refreshes every doc — see sync/types.ts for rationale. */
+  readonly fullResync = true as const;
   private readonly api: LarkClient;
 
   constructor(opts?: { larkCliPath?: string; as?: "user" | "bot" }) {
@@ -72,12 +150,69 @@ export class LarkSyncer implements PlatformSyncer {
       );
     }
 
+    let allNodesBySpace = new Map<string, Map<string, WikiNode>>();
+    const spaceNameBySpaceId = new Map<string, string>();
     const out: CloudItem[] = [];
-    const spaceIds = this.resolveSpaceIds(args.config, args.rootOverride);
 
-    for (const spaceId of spaceIds) {
-      await this.walkWikiSpace(spaceId, spaceNames, out);
+    let spaceIds = this.resolveSpaceIds(args.config, args.rootOverride);
+    // Expand the "all spaces" sentinel: my_library + every team space.
+    if (spaceIds.length === 1 && spaceIds[0] === ALL_SPACES_SENTINEL) {
+      const all = new Set<string>(["my_library"]);
+      try {
+        const spaces = await this.api.listWikiSpaces();
+        for (const s of spaces) all.add(s.space_id);
+      } catch (err) {
+        console.warn(
+          `  ⚠ wiki +space-list failed during default expansion: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+      spaceIds = Array.from(all);
     }
+
+    for (const rawSpaceId of spaceIds) {
+      // The `my_library` alias always resolves to the personal
+      // library; we hard-code its human name because `+space-list`
+      // only enumerates team spaces and never returns a name for it.
+      const hintName = rawSpaceId === "my_library" ? "my-library" : spaceNames.get(rawSpaceId) ?? null;
+      if (hintName) spaceNameBySpaceId.set(rawSpaceId, hintName);
+      const tree = await this.collectWikiTree(rawSpaceId, hintName);
+      allNodesBySpace.set(rawSpaceId, tree);
+    }
+
+    // Flatten to CloudItem[]. Sort by depth so parents are written
+    // before children (helps path-allocator pre-fill directory names
+    // and means a `mkdirSync(..., recursive: true)` succeeds for the
+    // parent directory before the child tries to land inside).
+    //
+    // CRITICAL: `uuid` is the obj_token, NOT the node_token. The
+    // pre-2026-07 local files stamped `lark_id = obj_token` into
+    // frontmatter, so obj_token is the actual idempotency key on
+    // disk. Using node_token as the cloud→local match key would
+    // re-create every existing file at the new (correct) path,
+    // because no local entry would ever match a node_token in the
+    // loadLocal map. node_token is preserved in extras for
+    // cross-referencing and as `lark_node_token` in frontmatter.
+    const flat: CloudItem[] = [];
+    for (const [rawSpaceId, tree] of allNodesBySpace.entries()) {
+      // `+node-list` resolves my_library → a numeric space_id, so the
+      // node's space_id is the numeric one. The map keys are the
+      // *raw* input ids (may be "my_library"); look up either form.
+      const sample = [...tree.values()][0];
+      const resolvedSpaceId = sample?.space_id ?? rawSpaceId;
+      const spaceName =
+        spaceNameBySpaceId.get(rawSpaceId) ??
+        spaceNameBySpaceId.get(resolvedSpaceId ?? "") ??
+        null;
+
+      if (resolvedSpaceId && resolvedSpaceId !== "my_library") {
+        flat.push(this.spaceIndexItem(resolvedSpaceId, spaceName));
+      }
+      for (const node of tree.values()) {
+        flat.push(this.nodeToCloudItem(node, tree));
+      }
+    }
+    flat.sort((a, b) => pathDepth(a) - pathDepth(b));
+    out.push(...flat);
 
     // Minutes: wide time range; cheap metadata-only scan.
     try {
@@ -90,7 +225,6 @@ export class LarkSyncer implements PlatformSyncer {
           uuid: m.token,
           title: extractMinuteTitle(m.display_info),
           url: m.meta_data?.app_link ?? `https://feishu.cn/minutes/${m.token}`,
-          // Last-edited time unknown from search; fall back to created if any.
           lastEditedTime: new Date().toISOString(),
           createdTime: new Date().toISOString(),
           parent: { type: "minutes", id: null },
@@ -98,7 +232,6 @@ export class LarkSyncer implements PlatformSyncer {
         });
       }
     } catch (err) {
-      // Minutes search may fail with missing scope; surface but don't block wiki.
       console.warn(
         `  ⚠ minutes search skipped: ${err instanceof Error ? err.message : err}`,
       );
@@ -107,22 +240,17 @@ export class LarkSyncer implements PlatformSyncer {
     return out;
   }
 
-  private async walkWikiSpace(
+  /**
+   * Walk a wiki subtree and return every node (parents + leaves),
+   * keyed by node_token. The returned map also records `parent_node_token`
+   * on each node so callers can rebuild the path-to-root.
+   */
+  private async collectWikiTree(
     spaceId: string,
-    spaceNames: Map<string, string>,
-    out: CloudItem[],
-  ): Promise<void> {
-    // Resolve `my_library` to its real space_id before listing. The CLI
-    // resolves it for us and prints "Resolved my_library to space X",
-    // but we need the resolved id to look up a human name in our map.
-    // Easiest: pass `my_library` through and rely on `listWikiNodes`
-    // to do the resolution server-side; we'll preserve the alias as
-    // the display name when we couldn't find a real one.
-    const spaceName = spaceNames.get(spaceId) ?? (spaceId === "my_library" ? "my-library" : null);
-    const visited = new Set<string>();
-    const queue: Array<{ spaceId: string; parent?: string }> = [
-      { spaceId },
-    ];
+    spaceName: string | null,
+  ): Promise<Map<string, WikiNode>> {
+    const visited = new Map<string, WikiNode>();
+    const queue: Array<{ spaceId: string; parent?: string }> = [{ spaceId }];
 
     while (queue.length > 0) {
       const head = queue.shift()!;
@@ -134,40 +262,26 @@ export class LarkSyncer implements PlatformSyncer {
 
       for (const node of nodes) {
         if (!node.node_token || visited.has(node.node_token)) continue;
-        visited.add(node.node_token);
 
-        // Resolve the per-node edit timestamp via +node-get. Best-effort:
-        // when it fails (missing scope, etc.) we keep the placeholder.
-        let lastEdited: string | undefined;
-        let createdTime: string | undefined;
+        // Resolve edit timestamp via +node-get (best-effort).
+        let objEditTime = node.obj_edit_time;
+        let objCreateTime = node.obj_create_time ?? node.node_create_time;
         if (node.obj_token && node.obj_type) {
           const meta = await safeRetrieve(
             () => this.api.getWikiNode(node.obj_token!, node.obj_type!),
             `wiki +node-get ${node.obj_token}`,
           );
           if (meta) {
-            const iso = unixToIsoLocal(meta.obj_edit_time);
-            if (iso) lastEdited = iso;
-            const c = unixToIsoLocal(meta.obj_create_time ?? meta.node_create_time);
-            if (c) createdTime = c;
+            objEditTime = meta.obj_edit_time ?? objEditTime;
+            objCreateTime = meta.obj_create_time ?? meta.node_create_time ?? objCreateTime;
           }
         }
 
-        out.push({
-          uuid: node.node_token,
-          title: node.title || "untitled",
-          url: `https://feishu.cn/wiki/${node.node_token}`,
-          lastEditedTime: lastEdited ?? new Date().toISOString(),
-          createdTime: createdTime ?? new Date().toISOString(),
-          parent: { type: "wiki", id: node.parent_node_token || null },
-          extras: {
-            kind: "wiki-node",
-            space_id: node.space_id ?? head.spaceId,
-            space_name: spaceName ?? null,
-            obj_token: node.obj_token,
-            obj_type: node.obj_type,
-            lark_id: node.node_token,
-          },
+        visited.set(node.node_token, {
+          ...node,
+          space_id: node.space_id ?? head.spaceId,
+          obj_edit_time: objEditTime,
+          obj_create_time: objCreateTime,
         });
 
         if (node.has_child && node.node_token) {
@@ -175,6 +289,76 @@ export class LarkSyncer implements PlatformSyncer {
         }
       }
     }
+
+    // Annotate every node with the resolved space name so the writer
+    // can slug the top-level subdir without re-looking-up.
+    if (spaceName) {
+      for (const n of visited.values()) {
+        n.space_name_hint = spaceName;
+      }
+    }
+
+    return visited;
+  }
+
+  /**
+   * Build a synthetic CloudItem that writes the per-space `index.md`
+   * — the human-readable anchor of a wiki knowledge base. Only team
+   * spaces get this; my_library lives under `<root>/Wiki/lark/my-library/`
+   * directly and doesn't need an index.
+   */
+  private spaceIndexItem(spaceId: string, spaceName: string | null): CloudItem {
+    const name = spaceName ?? `lark-${spaceId.slice(0, 6)}`;
+    return {
+      // Synthetic UUID: derive a stable id from the space id so a
+      // re-sync doesn't re-create the file (loadLocal will match).
+      uuid: `space:${spaceId}`,
+      title: name,
+      url: `https://feishu.cn/wiki/space/${spaceId}`,
+      lastEditedTime: new Date().toISOString(),
+      createdTime: new Date().toISOString(),
+      parent: { type: "wiki", id: null },
+      extras: {
+        kind: "space-index",
+        space_id: spaceId,
+        space_name: spaceName,
+        has_child: false,
+        path_segments: [], // depth 0 → top of the space tree
+      },
+    };
+  }
+
+  private nodeToCloudItem(
+    node: WikiNode,
+    tree: Map<string, WikiNode>,
+  ): CloudItem {
+    const lastEdited = unixToIsoLocal(node.obj_edit_time) || new Date().toISOString();
+    const created = unixToIsoLocal(node.obj_create_time) || new Date().toISOString();
+    // Idempotency key = obj_token. Pre-2026-07 local files stamped
+    // `lark_id = obj_token` in frontmatter; using node_token here
+    // would force re-creation on every sync because no local entry
+    // would match a node_token in the loadLocal map. Falls back to
+    // node_token only when the obj_token is missing (shouldn't
+    // happen for real wiki nodes — `+node-list` always returns one).
+    const uuid = node.obj_token || node.node_token;
+    return {
+      uuid,
+      title: node.title || "untitled",
+      url: `https://feishu.cn/wiki/${node.node_token}`,
+      lastEditedTime: lastEdited,
+      createdTime: created,
+      parent: { type: "wiki", id: node.parent_node_token || null },
+      extras: {
+        kind: "wiki-node",
+        space_id: node.space_id ?? null,
+        space_name: node.space_name_hint ?? null,
+        node_token: node.node_token,
+        obj_token: node.obj_token,
+        obj_type: node.obj_type,
+        has_child: node.has_child ?? false,
+        path_segments: computePathSegmentsFor(node, tree),
+      },
+    };
   }
 
   private resolveSpaceIds(config: LoadedConfig, rootOverride?: string): string[] {
@@ -186,11 +370,21 @@ export class LarkSyncer implements PlatformSyncer {
         .filter(Boolean);
     }
     const stored = config.config.lark?.state?.default_root_id;
-    if (!stored) return ["my_library"]; // sensible default for user identity
-    return stored
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
+    if (stored) {
+      return stored
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+    // No override and no stored default → walk every wiki space the
+    // user can see (personal library + all team spaces). This is the
+    // "just sync my whole workspace" default: the user shouldn't have
+    // to enumerate space IDs by hand for v1.
+    //
+    // We can't synchronously call the API here (resolveSpaceIds is
+    // sync), so return a sentinel marker and let listCloud expand it
+    // before BFS kicks off.
+    return [ALL_SPACES_SENTINEL];
   }
 
   // ─────────────────────────────────────────────────────────────────
@@ -274,6 +468,15 @@ export class LarkSyncer implements PlatformSyncer {
   ): Promise<{ relPath: string }> {
     const kind = (item.extras?.kind as string) ?? "wiki-node";
 
+    // Space-level index.md: written FIRST so the directory exists
+    // before any child writeNew lands inside it. We never overwrite
+    // a hand-edited index — if `existingInonId` is set (loadLocal
+    // hit), writeUpdate was already routed there; otherwise we
+    // write a fresh stub.
+    if (kind === "space-index") {
+      return this.writeSpaceIndex(item, config);
+    }
+
     let body = "";
     let fm: LarkOkfFields;
 
@@ -354,20 +557,26 @@ export class LarkSyncer implements PlatformSyncer {
 
     if (existingInonId) fm.inon_id = existingInonId;
 
-    // Path: <root>/Wiki/lark/<space-slug>/<sanitized-title>.md
+    // Resolve the on-disk path from path_segments. For a non-leaf
+    // (has_child) node, we lay out the node AS A DIRECTORY and write
+    // `index.md` inside it; for a leaf, we land at <dir>/<title>.md.
     const spaceIdValue =
       kind === "minute" ? null : ((item.extras?.space_id as string | undefined) ?? null);
     const spaceNameValue =
       kind === "minute" ? null : ((item.extras?.space_name as string | undefined) ?? null);
-    const subdir = kind === "minute" ? "minutes" : spaceSlug(spaceIdValue, spaceNameValue);
-    const targetDir = path.join(config.root, "Wiki", "lark", subdir);
+    const hasChild = Boolean(item.extras?.has_child);
 
-    fs.mkdirSync(targetDir, { recursive: true });
-    const allocator = createPathAllocator();
-    const sanitized = sanitizeFileName(item.title || "untitled");
-    const filePath = allocator.allocate(targetDir, sanitized, "file");
-    const absPath = path.resolve(targetDir, filePath);
+    const absPath = this.resolveNodeAbsPath({
+      config,
+      kind,
+      spaceId: spaceIdValue,
+      spaceName: spaceNameValue,
+      title: item.title || "untitled",
+      hasChild,
+      pathSegments: (item.extras?.path_segments as string[] | undefined) ?? null,
+    });
 
+    fs.mkdirSync(path.dirname(absPath), { recursive: true });
     const md = writeFrontmatterBody(
       fm as unknown as Record<string, unknown>,
       body,
@@ -377,13 +586,21 @@ export class LarkSyncer implements PlatformSyncer {
   }
 
   async writeUpdate(item: CloudItem, existing: LocalEntry, config: LoadedConfig) {
+    const kind = (item.extras?.kind as string) ?? "wiki-node";
+    if (kind === "space-index") {
+      // We deliberately never overwrite a hand-edited space index.
+      // User notes about the space (owners, conventions, etc.) live
+      // in <space>/index.md; an unconditional rewrite would clobber
+      // them. The anchor file is created on first sync; subsequent
+      // runs are no-ops.
+      return { relPath: path.relative(config.root, existing.absPath) };
+    }
     const preserved = await this.readExistingInonId(existing.absPath);
     // For updates we MUST write to the existing path so we don't create a
     // duplicate alongside (e.g. `To Mum.md` next to the canonical
     // `To-Mum.md`). We override the title → path mapping by computing
     // the body + frontmatter here, then writing to `existing.absPath`
     // directly.
-    const kind = (item.extras?.kind as string) ?? "wiki-node";
     let fm: LarkOkfFields;
     let body = "";
 
@@ -456,6 +673,125 @@ export class LarkSyncer implements PlatformSyncer {
     );
     fs.writeFileSync(existing.absPath, md, "utf8");
     return { relPath: path.relative(config.root, existing.absPath) };
+  }
+
+  /**
+   * Write the per-space index.md. Path:
+   * `<root>/Wiki/lark/wiki/<space-name>/index.md`.
+   *
+   * Body: name + space_id + URL. Kept short so users can hand-edit
+   * notes about the space (purpose, owners, conventions) without
+   * the syncer overwriting them — `existingInonId` plumbing in
+   * dispatcher + writeUpdate preserves user edits to existing
+   * index.md files.
+   */
+  private async writeSpaceIndex(
+    item: CloudItem,
+    config: LoadedConfig,
+  ): Promise<{ relPath: string }> {
+    const spaceId = item.extras?.space_id as string;
+    const spaceName = (item.extras?.space_name as string | null) ?? item.title;
+    const topSubdir = resolveTopSubdir(spaceId, spaceName);
+    const absPath = path.join(
+      config.root,
+      "Wiki",
+      "lark",
+      ...topSubdir,
+      "index.md",
+    );
+    fs.mkdirSync(path.dirname(absPath), { recursive: true });
+
+    // Read existing index.md if present (user may have hand-edited
+    // notes); preserve their custom body and only refresh the
+    // frontmatter + the minimal anchor lines.
+    const fm: Record<string, unknown> = {
+      type: "Lark Wiki Space",
+      source: "lark",
+      title: spaceName,
+      resource: `https://feishu.cn/wiki/space/${spaceId}`,
+      timestamp: new Date().toISOString(),
+      created_time: "",
+      last_edited_time: "",
+      lark_id: `space:${spaceId}`,
+      lark_space_id: spaceId,
+      author: "",
+      tags: ["Lark", `lark/wiki/${spaceName.toLowerCase().replace(/\s+/g, "-")}`],
+    };
+
+    let body = `# ${spaceName}\n\n`;
+    body += `> 飞书知识库空间 · space_id = \`${spaceId}\`\n`;
+    body += `> 来源链接：[在飞书中打开](https://feishu.cn/wiki/space/${spaceId})\n\n`;
+    body += `## 关于本目录\n\n`;
+    body += `- 此目录下的文件是飞书 wiki 知识库「${spaceName}」的镜像。\n`;
+    body += `- 有子节点的文档以 **目录 + index.md** 形式存放，叶子节点是 \`<title>.md\`。\n`;
+    body += `- 移动、修改本目录下的文件不会被回写到飞书（okfa 只读）；\n`;
+    body += `- 下次 \`okfa sync lark\` 时，本目录已有的文件按 \`lark_id\` 命中并保留原位。\n`;
+
+    const md = writeFrontmatterBody(fm, body);
+    fs.writeFileSync(absPath, md, "utf8");
+    return { relPath: path.relative(config.root, absPath) };
+  }
+
+  /**
+   * Compute the absolute path a node should be written to.
+   *
+   * Top-level layout (3 fixed subdirs):
+   *   - `<root>/Wiki/lark/my-library/...` for the personal library
+   *   - `<root>/Wiki/lark/wiki/<space-name>/...` for team wiki spaces
+   *   - `<root>/Wiki/lark/minutes/...` for minutes
+   *
+   * Inside a wiki space, every node — leaf OR intermediate — is laid
+   * out as `<space>/<path-segments>/`. A leaf lands at
+   * `<space>/<segments>/<title>.md`; a parent (has_child) lands at
+   * `<space>/<segments>/<title>/index.md`. The space itself is the
+   * root of the tree: its `index.md` describes the space and acts
+   * as the "where to drop new docs into this knowledge base"
+   * anchor.
+   */
+  private resolveNodeAbsPath(args: {
+    config: LoadedConfig;
+    kind: string;
+    spaceId: string | null;
+    spaceName: string | null;
+    title: string;
+    hasChild: boolean;
+    pathSegments: string[] | null;
+  }): string {
+    const { config, kind, spaceId, spaceName, title, hasChild, pathSegments } = args;
+
+    if (kind === "minute") {
+      return path.join(
+        config.root,
+        "Wiki",
+        "lark",
+        "minutes",
+        `${sanitizeFileName(title)}.md`,
+      );
+    }
+
+    // Top-level subdir for this space: my-library for the personal
+    // alias, wiki/<space-name> for team spaces.
+    const topSubdir = resolveTopSubdir(spaceId, spaceName);
+
+    // path_segments from BFS. The last segment is the node's own
+    // title (matching its parent's "child" entry).
+    const sanitized = sanitizeFileName(title);
+    const segments = pathSegments && pathSegments.length > 0 ? pathSegments : [sanitized];
+
+    const parentDirs = segments.slice(0, -1);
+    const selfSegment = segments[segments.length - 1] ?? sanitized;
+
+    const dirPath = path.join(
+      config.root,
+      "Wiki",
+      "lark",
+      ...topSubdir,
+      ...parentDirs,
+    );
+
+    return hasChild
+      ? path.join(dirPath, selfSegment, "index.md")
+      : path.join(dirPath, `${selfSegment}.md`);
   }
 
   private async readExistingInonId(absPath: string): Promise<string | undefined> {
