@@ -83,7 +83,7 @@ okfa shot find type --eq "Notion Page"
 | `okfa config <sub>`      | `show` / `path` / `root` / `edit`。           |
 | `okfa sync notion`       | Notion からのインクリメンタル同期              |
 |                         | （UUID + `last_edited_time`）。                |
-| `okfa sync lark`         | 同上、Lark / Feishu 用（v1 はスタブ）。        |
+| `okfa sync lark`         | Wiki、Drive、Minutes、添付スナップショットを同期。 |
 | `okfa shot ls`           | ワークスペースの全 `.md` を列挙。              |
 | `okfa shot find`         | frontmatter フィールド検索。                  |
 | `okfa shot search`       | 本文フルテキスト grep（`rg` が利用可能なら使用）。 |
@@ -122,8 +122,8 @@ notion_parent_id: ...
 |--------------|------------------|
 | Notion 取得   | ✅ 動作中。      |
 | Notion 同期   | ✅ 動作中。      |
-| Lark 取得    | 🚧 v1 スタブ。  |
-| Lark 同期    | 🚧 v1 スタブ。  |
+| Lark 取得    | ✅ Wiki、Drive、Minutes、主要形式に対応。 |
+| Lark 同期    | ✅ 基底 token で重複排除し全件更新。 |
 | shot        | ✅ 動作中。      |
 
 Lark の wiki walker は意図的に後続作業として残し、まず CLI / Skill 層

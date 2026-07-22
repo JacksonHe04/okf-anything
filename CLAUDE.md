@@ -53,10 +53,14 @@ okf-anything 可拉取并增量同步 **Notion** 与 **飞书Lark** 文档，将
 
 ## Lark
 
-lark/ 下应该是 wiki/, my-library/, minutes/ 3 个目录。
+lark/ 下应该是 wiki/, personal/, minutes/ 3 个目录。
 
-每次拉，默认这 3 个全部都拉。
+每次拉，默认全部都拉：个人文档库、全部可见 Wiki、妙记，以及 Drive Search 能发现的独立云盘对象。
 wiki/ 中的知识库，每个是一个目录，目录下要有一个 index.md 表明这是哪个知识库（方便后续把这个知识库的东西更新到这个知识库）
+
+personal/ 中按文档 owner 分目录，一人一个目录；不得按 docx/bitable/file 等技术类型分目录。个人文档库与独立 Drive 对象都按此规则归档。
+
+Docx/Mindnote/Base 尽可能渲染为可检索 Markdown；Sheet、Slides、普通文件及 Base 的保真快照放在对应 Markdown 旁的 `<name>.assets/` 中。
 
 ## Notion
 

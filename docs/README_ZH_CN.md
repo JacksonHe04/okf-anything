@@ -76,7 +76,7 @@ okfa shot find type --eq "Notion Page"
 | `okfa init [<dir>]`   | 引导新工作区。                                 |
 | `okfa config <sub>`   | `show` / `path` / `root` / `edit`。            |
 | `okfa sync notion`    | 从 Notion 增量同步（UUID + `last_edited_time`）。|
-| `okfa sync lark`      | 同上，针对 Lark / 飞书（v1 是 stub）。          |
+| `okfa sync lark`      | 同步可见的 Wiki、云盘对象、妙记与附件快照。     |
 | `okfa shot ls`        | 列出工作区所有 `.md` 文件。                     |
 | `okfa shot find`      | 按 frontmatter 字段查找。                       |
 | `okfa shot search`    | 正文全文 grep（可用 `rg` 加速）。                |
@@ -115,11 +115,12 @@ notion_parent_id: ...
 |------------|--------------|
 | Notion 拉取 | ✅ 可用。     |
 | Notion 同步 | ✅ 可用。     |
-| Lark 拉取  | 🚧 v1 stub。 |
-| Lark 同步  | 🚧 v1 stub。 |
+| Lark 拉取  | ✅ 支持 Wiki、Drive、妙记及常见文档类型。 |
+| Lark 同步  | ✅ 按底层 token 去重并全量刷新。 |
 | shot      | ✅ 可用。     |
 
-Lark 的 wiki walker 暂时 stub，先把 CLI / Skill 这层产品形态立起来。
+Lark 同步会合并 Wiki 树与分页 Drive Search，并按底层对象 token 去重。
+可检索内容写为 Markdown；无法无损表达的格式作为相邻快照保存。
 本地 `lark/` 子目录仍然能被 `okfa shot *` 完整读取，`okfa sync lark`
 也支持 `--dry-run`。
 

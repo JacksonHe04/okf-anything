@@ -12,8 +12,8 @@
 
 ## What it does
 
-okf-anything pulls and incrementally **syncs** your Notion (and Lark, in
-follow-up) content into a local **OKF (Open Knowledge Format)** Markdown
+okf-anything pulls and incrementally **syncs** your Notion and Lark
+content into a local **OKF (Open Knowledge Format)** Markdown
 workspace that you own, version, and let your AI Agent (e.g. Claude
 Code) search with surgical precision.
 
@@ -90,7 +90,7 @@ near-instant: only `last_edited_time` mutations are pulled.
 | `okfa init [<dir>]`   | Bootstrap a workspace.                                      |
 | `okfa config <sub>`   | `show` / `path` / `root` / `edit`.                          |
 | `okfa sync notion`    | Incremental sync from Notion (UUID + `last_edited_time`).   |
-| `okfa sync lark`      | Same for Lark / Feishu (v1 is a stub — see Status below).   |
+| `okfa sync lark`      | Sync visible Lark Wiki, Drive, Minutes, and supported assets. |
 | `okfa shot ls`        | List all `.md` files in the workspace.                      |
 | `okfa shot find`      | Frontmatter field lookup.                                   |
 | `okfa shot search`    | Full-text grep across bodies (`rg` when available).         |
@@ -182,14 +182,15 @@ Field mapping for Lark is symmetric (`lark_id`, `lark_parent_type`, …).
 |-------------|--------------------|
 | Notion pull | ✅ Working.        |
 | Notion sync | ✅ Working.        |
-| Lark pull   | 🚧 v1 stub.       |
-| Lark sync   | 🚧 v1 stub.       |
+| Lark pull   | ✅ Wiki, Drive, Minutes, Docx, Base, Sheet, Slides, Mindnote, files. |
+| Lark sync   | ✅ Full refresh with token-based idempotency. |
 | shot        | ✅ Working.        |
 
-Lark's wiki walker is intentionally left as a follow-up so we can ship
-the CLI / Skill surface immediately; the local `lark/` subdirectory is
-fully readable by `okfa shot *` and `okfa sync lark` already honors
-`--dry-run` semantics.
+Lark sync combines the Wiki tree with paginated Drive Search and deduplicates
+them by underlying object token. Team Wiki content is grouped by knowledge
+base, while personal/standalone Drive content is grouped by owner. Searchable content is rendered to Markdown;
+formats that cannot be represented faithfully as Markdown are preserved as
+sidecar snapshots next to their OKF metadata file.
 
 ## Repository layout
 

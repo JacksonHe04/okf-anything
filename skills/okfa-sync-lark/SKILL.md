@@ -28,8 +28,25 @@ okfa sync lark [--root <spec>] [--dry-run]
 
 - `--dry-run` — list the cloud tree without writing.
 
-Output lands in `<root>/Wiki/lark/<space-slug>/<title>.md` for wiki
-docs and `<root>/Wiki/lark/minutes/<title>.md` for minutes.
+Output lands in `<root>/Wiki/lark/wiki/<knowledge-base>/...` for team Wiki,
+`personal/<owner>/...` for the personal library and standalone Drive objects,
+and `minutes/` for Minutes. Binary/structured snapshots land beside their OKF
+file in `<name>.assets/`. Personal content is grouped by person, never by
+technical object type.
+
+The default run pulls every visible Wiki space, every paginated Drive Search
+result, and all searchable Minutes. Duplicate Wiki/Drive hits are merged by
+their underlying object token.
+
+Content handling is type-aware:
+
+- `docx`: Markdown body via `docs +fetch`
+- `doc`: Markdown export
+- `bitable`: searchable table Markdown plus `.base` snapshot
+- `sheet`: `.xlsx` snapshot
+- `slides`: `.pptx` snapshot
+- `mindnote`: Markdown node tree
+- `file`: original bytes
 
 ## Auth
 
@@ -76,7 +93,7 @@ created_time: <RFC3339>
 last_edited_time: <RFC3339>
 lark_id: <node_token or minute token>
 lark_obj_token: <docx/file token>
-lark_obj_type: docx | sheet | bitable | mindnote | file | minutes
+lark_obj_type: doc | docx | sheet | bitable | slides | mindnote | file | minutes
 lark_space_id: <wiki space id>      # null for minutes
 lark_parent_type: wiki | minutes
 lark_parent_id: <parent node_token> # null for roots
