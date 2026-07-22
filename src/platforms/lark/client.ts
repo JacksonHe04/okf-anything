@@ -20,6 +20,7 @@
  * whatever `lark-cli` resolves to in $PATH.
  */
 import { execFile } from "child_process";
+import * as path from "path";
 
 /** A wiki node as returned by `wiki +node-list` / `wiki +node-get`. */
 export interface WikiNode {
@@ -58,6 +59,32 @@ export interface MinuteItem {
   /** Full pretty description (e.g. "所有者: X 开始时间: ... 时长: ..."). */
   display_info: string;
   meta_data?: { app_link?: string; description?: string };
+}
+
+/** A result returned by Drive Search v2. */
+export interface DriveSearchItem {
+  entity_type: string;
+  title_highlighted: string;
+  summary_highlighted?: string;
+  result_meta: {
+    token: string;
+    doc_types: string;
+    url?: string;
+    icon_info?: string;
+    create_time?: number;
+    update_time?: number;
+    owner_name?: string;
+  };
+}
+
+export interface MindnoteNode {
+  node_id: string;
+  parent_id?: string;
+  texts?: Array<{ element_type?: string; text?: { content?: string } }>;
+  notes?: Array<{ element_type?: string; text?: { content?: string } }>;
+  images?: Array<{ token?: string }>;
+  finish?: boolean;
+  highlight?: string;
 }
 
 /** A minute's full metadata + AI artifacts (summary, transcript, chapters). */
@@ -128,8 +155,8 @@ export class LarkClient {
    * without the outer `{ok, data, error}` wrapper. Those responses are
    * recognized by a top-level `code` field and remapped automatically.
    */
-  async run<T>(args: string[]): Promise<T> {
-    const stdout = await this.exec(args);
+  async run<T>(args: string[], opts?: { cwd?: string }): Promise<T> {
+    const stdout = await this.exec(args, opts);
     let parsed: LarkCliEnvelope<T> | (T & { code?: number; msg?: string });
     try {
       parsed = JSON.parse(stdout);
@@ -164,12 +191,21 @@ export class LarkClient {
     return parsed as T;
   }
 
-  private exec(args: string[]): Promise<string> {
+  private exec(args: string[], opts?: { cwd?: string }): Promise<string> {
     return new Promise((resolve, reject) => {
       execFile(
         this.bin,
         args,
-        { maxBuffer: this.maxBuffer, encoding: "utf8" },
+        {
+          maxBuffer: this.maxBuffer,
+          encoding: "utf8",
+          cwd: opts?.cwd,
+          env: {
+            ...process.env,
+            LARKSUITE_CLI_NO_UPDATE_NOTIFIER: "1",
+            LARKSUITE_CLI_NO_SKILLS_NOTIFIER: "1",
+          },
+        },
         (err, stdout, stderr) => {
           if (err) {
             const e = err as Error & { code?: string; stderr?: string };
@@ -243,7 +279,43 @@ export class LarkClient {
       "--format",
       "json",
     ];
-    return this.run<WikiNode>(args);
+    return this.runWithRateLimitRetry<WikiNode>(args);
+  }
+
+  /** Resolve a Wiki node_token when the underlying object type is unknown. */
+  async getWikiNodeByNodeToken(nodeToken: string): Promise<WikiNode> {
+    return this.runWithRateLimitRetry<WikiNode>([
+      "wiki",
+      "+node-get",
+      "--node-token",
+      nodeToken,
+      "--as",
+      this.as,
+      "--format",
+      "json",
+    ]);
+  }
+
+  /**
+   * Wiki node resolution is the hottest endpoint during a full hierarchy
+   * rebuild and Lark may temporarily answer with 99991400. Retry only that
+   * transient/rate-limit class; permission and input failures still surface
+   * immediately.
+   */
+  private async runWithRateLimitRetry<T>(args: string[], maxAttempts = 5): Promise<T> {
+    let delayMs = 1_000;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await this.run<T>(args);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const retryable = /(?:99991400|rate[_ -]?limit|retryable)/i.test(message);
+        if (!retryable || attempt === maxAttempts) throw error;
+        await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+        delayMs = Math.min(delayMs * 2, 8_000);
+      }
+    }
+    throw new Error(`lark-cli ${args.join(" ")} exhausted retries`);
   }
 
   /**
@@ -268,6 +340,165 @@ export class LarkClient {
       "json",
     ]);
     return out.document?.content ?? "";
+  }
+
+  /** Search every Drive/Wiki object visible to the current user. */
+  async searchAllDriveItems(): Promise<DriveSearchItem[]> {
+    const all: DriveSearchItem[] = [];
+    let pageToken: string | undefined;
+    for (let round = 0; round < 100; round++) {
+      const args = [
+        "drive",
+        "+search",
+        "--query",
+        "",
+        "--page-size",
+        "20",
+        "--sort",
+        "edit_time",
+        "--as",
+        this.as,
+        "--format",
+        "json",
+      ];
+      if (pageToken) args.push("--page-token", pageToken);
+      const out = await this.run<{
+        results?: DriveSearchItem[];
+        has_more?: boolean;
+        page_token?: string;
+      }>(args);
+      all.push(...(out.results ?? []));
+      if (!out.has_more || !out.page_token) break;
+      pageToken = out.page_token;
+    }
+    return all;
+  }
+
+  /** Export an online document to a caller-selected local path. */
+  async exportDocument(args: {
+    token: string;
+    docType: "doc" | "docx" | "sheet" | "bitable" | "slides";
+    extension: "markdown" | "xlsx" | "base" | "pptx";
+    outputPath: string;
+  }): Promise<void> {
+    const cwd = path.dirname(args.outputPath);
+    const fileName = path.basename(args.outputPath);
+    await this.run<unknown>([
+      "drive",
+      "+export",
+      "--token",
+      args.token,
+      "--doc-type",
+      args.docType,
+      "--file-extension",
+      args.extension,
+      "--output-dir",
+      ".",
+      "--file-name",
+      fileName,
+      "--overwrite",
+      "--as",
+      this.as,
+      "--format",
+      "json",
+    ], { cwd });
+  }
+
+  /** Download a regular Drive file without transforming it. */
+  async downloadFile(fileToken: string, outputPath: string): Promise<void> {
+    const cwd = path.dirname(outputPath);
+    await this.run<unknown>([
+      "drive",
+      "+download",
+      "--file-token",
+      fileToken,
+      "--output",
+      path.basename(outputPath),
+      "--overwrite",
+      "--as",
+      this.as,
+      "--format",
+      "json",
+    ], { cwd });
+  }
+
+  /** Render every Base table and record page using lark-cli's Markdown output. */
+  async fetchBaseMarkdown(baseToken: string): Promise<string> {
+    const tables: Array<{ id: string; name: string }> = [];
+    let offset = 0;
+    for (let round = 0; round < 100; round++) {
+      const out = await this.run<{ tables?: Array<{ id: string; name: string }>; total?: number }>([
+        "base",
+        "+table-list",
+        "--base-token",
+        baseToken,
+        "--limit",
+        "100",
+        "--offset",
+        String(offset),
+        "--as",
+        this.as,
+        "--format",
+        "json",
+      ]);
+      const page = out.tables ?? [];
+      tables.push(...page);
+      offset += page.length;
+      if (page.length === 0 || offset >= (out.total ?? offset)) break;
+    }
+
+    const sections: string[] = [];
+    for (const table of tables) {
+      let recordOffset = 0;
+      let pageNumber = 1;
+      const pages: string[] = [];
+      for (let round = 0; round < 1_000; round++) {
+        const raw = await this.exec([
+          "base",
+          "+record-list",
+          "--base-token",
+          baseToken,
+          "--table-id",
+          table.id,
+          "--limit",
+          "200",
+          "--offset",
+          String(recordOffset),
+          "--as",
+          this.as,
+          "--format",
+          "markdown",
+        ]);
+        const meta = raw.match(/Meta: count=(\d+); has_more=(true|false)/);
+        const count = meta ? Number(meta[1]) : 0;
+        const hasMore = meta?.[2] === "true";
+        const cleaned = raw.replace(/\n?Meta: count=.*$/m, "").trim();
+        if (cleaned) {
+          pages.push(pageNumber === 1 ? cleaned : `#### 第 ${pageNumber} 页\n\n${cleaned}`);
+        }
+        if (!hasMore || count <= 0) break;
+        recordOffset += count;
+        pageNumber++;
+      }
+      sections.push(`## ${table.name}\n\n${pages.join("\n\n") || "（空表）"}`);
+    }
+    return sections.join("\n\n");
+  }
+
+  /** Read a Mindnote's node graph for Markdown rendering by the syncer. */
+  async listMindnoteNodes(mindnoteId: string): Promise<MindnoteNode[]> {
+    const out = await this.run<{ nodes?: MindnoteNode[] }>([
+      "mindnotes",
+      "nodes",
+      "list",
+      "--mindnote-id",
+      mindnoteId,
+      "--as",
+      this.as,
+      "--format",
+      "json",
+    ]);
+    return out.nodes ?? [];
   }
 
   /**

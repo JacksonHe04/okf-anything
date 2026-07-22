@@ -20,11 +20,16 @@ import { writeFrontmatterBody, parseFrontmatter } from "../../utils/frontmatter.
 import { IgnoreMatcher } from "../../ignore/matcher.js";
 import { safeRetrieve } from "../../utils/safe-call.js";
 import { sanitizeFileName } from "../../utils/sanitize.js";
-import { createPathAllocator } from "../../utils/path-allocator.js";
 import type { LoadedConfig } from "../../config/loader.js";
 import type { CloudItem, LocalEntry } from "../../sync/engine.js";
 import type { PlatformSyncer } from "../../sync/types.js";
-import { LarkClient, type WikiNode, type MinuteDetail } from "./client.js";
+import {
+  LarkClient,
+  type DriveSearchItem,
+  type MindnoteNode,
+  type WikiNode,
+  type MinuteDetail,
+} from "./client.js";
 import {
   buildWikiNodeFrontmatter,
   buildMinuteFrontmatter,
@@ -91,10 +96,16 @@ function sanitizeFileNameLocal(name: string): string {
  * The space slug is the human-readable name (when we have one) or
  * `lark-<id-prefix>` as fallback — same logic as `convert.spaceSlug`.
  */
-function resolveTopSubdir(spaceId: string | null, spaceName: string | null): string[] {
+function resolveTopSubdir(
+  spaceId: string | null,
+  spaceName: string | null,
+  ownerName?: string | null,
+): string[] {
   // The personal library: detected either by the raw alias or by the
   // human name we hard-code for it in listCloud ("my-library").
-  if (spaceId === "my_library" || spaceName === "my-library") return ["my-library"];
+  if (spaceId === "my_library" || spaceName === "my-library") {
+    return ["personal", sanitizeFileNameLocal(ownerName || "未知所有者")];
+  }
   if (spaceName) return ["wiki", normalizeSlug(spaceName)];
   return ["wiki", `lark-${(spaceId ?? "").slice(0, 6)}`];
 }
@@ -115,6 +126,7 @@ export class LarkSyncer implements PlatformSyncer {
   /** Every run refreshes every doc — see sync/types.ts for rationale. */
   readonly fullResync = true as const;
   private readonly api: LarkClient;
+  private readonly wikiNodeCache = new Map<string, Promise<WikiNode>>();
 
   constructor(opts?: { larkCliPath?: string; as?: "user" | "bot" }) {
     this.api = new LarkClient(opts);
@@ -128,6 +140,7 @@ export class LarkSyncer implements PlatformSyncer {
     config: LoadedConfig;
     rootOverride?: string;
   }): Promise<CloudItem[]> {
+    this.wikiNodeCache.clear();
     const ping = await this.api.ping();
     if (!ping.ok) {
       throw new Error(
@@ -214,6 +227,50 @@ export class LarkSyncer implements PlatformSyncer {
     flat.sort((a, b) => pathDepth(a) - pathDepth(b));
     out.push(...flat);
 
+    // Drive Search discovers standalone docs/files that are not reachable
+    // from a Wiki tree. It also returns Wiki hits, so dedupe on the
+    // underlying object token and keep the hierarchical Wiki item when one
+    // already exists.
+    try {
+      const known = new Map(out.map((item) => [item.uuid, item]));
+      const driveItems = await this.api.searchAllDriveItems();
+      for (const result of driveItems) {
+        const item = this.driveSearchItemToCloudItem(result);
+        if (!item) continue;
+        const existing = known.get(item.uuid);
+        if (existing) {
+          existing.extras = {
+            ...(existing.extras ?? {}),
+            owner_name: item.extras?.owner_name ?? existing.extras?.owner_name ?? null,
+          };
+          continue;
+        }
+        const resolved = result.entity_type === "WIKI"
+          ? await this.resolveSearchWikiItem(item, spaceNames)
+          : item;
+        known.set(resolved.uuid, resolved);
+        out.push(resolved);
+      }
+
+      // The personal-library space index has no owner metadata of its own.
+      // Infer the directory owner from the personal docs returned by Search.
+      const personalOwner = mostFrequentString(
+        out
+          .filter((item) => item.extras?.space_name === "my-library")
+          .map((item) => item.extras?.owner_name)
+          .filter((value): value is string => typeof value === "string" && value.length > 0),
+      ) ?? "未知所有者";
+      for (const item of out) {
+        if (item.extras?.space_name === "my-library" && !item.extras.owner_name) {
+          item.extras.owner_name = personalOwner;
+        }
+      }
+    } catch (err) {
+      console.warn(
+        `  ⚠ drive +search skipped: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
     // Minutes: wide time range; cheap metadata-only scan.
     try {
       const minutes = await this.api.searchMinutes({
@@ -238,6 +295,95 @@ export class LarkSyncer implements PlatformSyncer {
     }
 
     return out;
+  }
+
+  private driveSearchItemToCloudItem(result: DriveSearchItem): CloudItem | null {
+    const meta = result.result_meta;
+    if (!meta?.token || !meta.doc_types) return null;
+
+    let icon: { token?: string; file_type?: string | null } = {};
+    try {
+      icon = meta.icon_info ? JSON.parse(meta.icon_info) : {};
+    } catch {
+      // Search results remain usable without optional icon metadata.
+    }
+
+    const objType = normalizeDriveObjectType(meta.doc_types);
+    const objToken = icon.token || meta.token;
+    const title = decodeSearchHighlight(result.title_highlighted) || "untitled";
+    return {
+      uuid: objToken,
+      title,
+      url: meta.url ?? buildObjectUrl(objType, meta.token),
+      createdTime: unixToIsoLocal(meta.create_time) || new Date().toISOString(),
+      lastEditedTime: unixToIsoLocal(meta.update_time) || new Date().toISOString(),
+      parent: { type: "drive", id: null },
+      extras: {
+        kind: "drive-item",
+        obj_token: objToken,
+        obj_type: objType,
+        node_token: result.entity_type === "WIKI" ? meta.token : null,
+        file_extension: icon.file_type ?? null,
+        owner_name: meta.owner_name ?? null,
+        entity_type: result.entity_type,
+        path_segments: [objType, objToken],
+      },
+    };
+  }
+
+  /** Resolve Search-only Wiki hits into a knowledge-base hierarchy. */
+  private async resolveSearchWikiItem(
+    item: CloudItem,
+    spaceNames: Map<string, string>,
+  ): Promise<CloudItem> {
+    const objToken = (item.extras?.obj_token as string | undefined) ?? item.uuid;
+    const objType = (item.extras?.obj_type as string | undefined) ?? "docx";
+    const node = await safeRetrieve(
+      () => this.getWikiNodeCached(objToken, objType),
+      `wiki +node-get ${objToken}`,
+    );
+    if (!node) return item;
+
+    const chain: WikiNode[] = [node];
+    const seen = new Set<string>([node.node_token]);
+    let cursor = node;
+    for (let depth = 0; depth < 100 && cursor.parent_node_token; depth++) {
+      if (seen.has(cursor.parent_node_token)) break;
+      seen.add(cursor.parent_node_token);
+      const parent = await safeRetrieve(
+        () => this.getWikiNodeByNodeTokenCached(cursor.parent_node_token!),
+        `wiki +node-get ${cursor.parent_node_token}`,
+      );
+      if (!parent) break;
+      chain.push(parent);
+      cursor = parent;
+    }
+
+    const root = chain[chain.length - 1] ?? node;
+    const listedSpaceName = node.space_id ? spaceNames.get(node.space_id) : undefined;
+    const spaceName = listedSpaceName ?? root.title ?? `知识库-${(node.space_id ?? "unknown").slice(0, 8)}`;
+    const fullSegments = chain
+      .slice()
+      .reverse()
+      .map((entry) => sanitizeFileName(entry.title || "untitled"));
+    const usesRootAsSpaceName = !listedSpaceName && root.title === spaceName;
+
+    return {
+      ...item,
+      parent: { type: "wiki", id: node.parent_node_token || null },
+      extras: {
+        ...(item.extras ?? {}),
+        kind: "wiki-node",
+        space_id: node.space_id ?? null,
+        space_name: spaceName,
+        node_token: node.node_token,
+        obj_token: node.obj_token ?? objToken,
+        obj_type: node.obj_type ?? objType,
+        has_child: node.has_child ?? false,
+        is_space_root: usesRootAsSpaceName && node.node_token === root.node_token,
+        path_segments: usesRootAsSpaceName ? fullSegments.slice(1) : fullSegments,
+      },
+    };
   }
 
   /**
@@ -268,7 +414,7 @@ export class LarkSyncer implements PlatformSyncer {
         let objCreateTime = node.obj_create_time ?? node.node_create_time;
         if (node.obj_token && node.obj_type) {
           const meta = await safeRetrieve(
-            () => this.api.getWikiNode(node.obj_token!, node.obj_type!),
+            () => this.getWikiNodeCached(node.obj_token!, node.obj_type!),
             `wiki +node-get ${node.obj_token}`,
           );
           if (meta) {
@@ -299,6 +445,47 @@ export class LarkSyncer implements PlatformSyncer {
     }
 
     return visited;
+  }
+
+  /** Reuse Wiki metadata across tree discovery, Search resolution, and render. */
+  private getWikiNodeCached(objToken: string, objType: string): Promise<WikiNode> {
+    return this.loadWikiNodeCached(
+      `obj:${objType}:${objToken}`,
+      () => this.api.getWikiNode(objToken, objType),
+    );
+  }
+
+  private getWikiNodeByNodeTokenCached(nodeToken: string): Promise<WikiNode> {
+    return this.loadWikiNodeCached(
+      `node:${nodeToken}`,
+      () => this.api.getWikiNodeByNodeToken(nodeToken),
+    );
+  }
+
+  private loadWikiNodeCached(
+    key: string,
+    load: () => Promise<WikiNode>,
+  ): Promise<WikiNode> {
+    const existing = this.wikiNodeCache.get(key);
+    if (existing) return existing;
+
+    const pending = load()
+      .then((node) => {
+        this.wikiNodeCache.set(`node:${node.node_token}`, Promise.resolve(node));
+        if (node.obj_token && node.obj_type) {
+          this.wikiNodeCache.set(
+            `obj:${node.obj_type}:${node.obj_token}`,
+            Promise.resolve(node),
+          );
+        }
+        return node;
+      })
+      .catch((error) => {
+        this.wikiNodeCache.delete(key);
+        throw error;
+      });
+    this.wikiNodeCache.set(key, pending);
+    return pending;
   }
 
   /**
@@ -477,104 +664,10 @@ export class LarkSyncer implements PlatformSyncer {
       return this.writeSpaceIndex(item, config);
     }
 
-    let body = "";
-    let fm: LarkOkfFields;
+    const absPath = this.resolveItemAbsPath(item, config);
 
-    if (kind === "minute") {
-      fm = buildMinuteFrontmatter({
-        item: {
-          token: item.uuid,
-          title: item.title,
-          display_info: item.title,
-          meta_data: { app_link: item.url },
-        },
-        resource: item.url,
-      });
-
-      // Pull full detail (transcript / chapters / summary). Best-effort:
-      // if artifacts scope is missing, fall back to a stub body.
-      const detail = await safeRetrieve(
-        () => this.api.getMinuteDetail(item.uuid),
-        `minutes detail ${item.uuid}`,
-      );
-
-      body = renderMinuteBody(detail, fm.title, item.url);
-      if (detail) {
-        // Stamp metadata back into frontmatter so the file is searchable.
-        const meta = detail;
-        if (meta.duration) fm.lark_duration_ms = meta.duration;
-        if (meta.create_time) fm.created_time = millisToIso(meta.create_time);
-        if (meta.create_time) fm.last_edited_time = millisToIso(meta.create_time);
-        if (meta.create_time) fm.timestamp = millisToIso(meta.create_time);
-        if (meta.note_id) fm.lark_note_id = meta.note_id;
-        if (Array.isArray(meta.keywords) && meta.keywords.length > 0) {
-          // Single-line comma-separated string instead of a YAML array —
-          // keeps the frontmatter flat and grep-friendly.
-          fm.lark_keywords = meta.keywords.join(", ");
-        }
-      }
-    } else {
-      // Wiki node: resolve to a full node record (with timestamps) before
-      // computing frontmatter, then fetch markdown body via docs +fetch.
-      const objToken =
-        (item.extras?.obj_token as string | undefined) ?? item.uuid;
-      const objType =
-        (item.extras?.obj_type as string | undefined) ?? "docx";
-      const spaceId =
-        (item.extras?.space_id as string | undefined) ?? null;
-
-      const nodeMeta = await safeRetrieve(
-        () => this.api.getWikiNode(objToken, objType),
-        `wiki +node-get ${objToken}`,
-      );
-
-      const merged: WikiNode = {
-        space_id: spaceId ?? nodeMeta?.space_id ?? undefined,
-        node_token: item.uuid,
-        obj_token: objToken,
-        obj_type: objType,
-        parent_node_token: item.parent.id ?? "",
-        title: item.title,
-        has_child: false,
-        obj_edit_time: nodeMeta?.obj_edit_time,
-        obj_create_time: nodeMeta?.obj_create_time,
-        node_create_time: nodeMeta?.node_create_time,
-        updated_at: nodeMeta?.updated_at,
-      };
-
-      fm = buildWikiNodeFrontmatter({
-        node: merged,
-        spaceName: (item.extras?.space_name as string | undefined) ?? null,
-      });
-
-      // Fetch markdown body (best-effort: an empty/locked doc returns "").
-      const fetched = await safeRetrieve(
-        () => this.api.fetchDocMarkdown(objToken),
-        `docs +fetch ${objToken}`,
-      );
-      body = fetched && fetched.trim() ? `${fetched}\n` : `# ${fm.title}\n\n（暂无正文）\n`;
-    }
-
+    const { frontmatter: fm, body } = await this.renderItem(item, absPath);
     if (existingInonId) fm.inon_id = existingInonId;
-
-    // Resolve the on-disk path from path_segments. For a non-leaf
-    // (has_child) node, we lay out the node AS A DIRECTORY and write
-    // `index.md` inside it; for a leaf, we land at <dir>/<title>.md.
-    const spaceIdValue =
-      kind === "minute" ? null : ((item.extras?.space_id as string | undefined) ?? null);
-    const spaceNameValue =
-      kind === "minute" ? null : ((item.extras?.space_name as string | undefined) ?? null);
-    const hasChild = Boolean(item.extras?.has_child);
-
-    const absPath = this.resolveNodeAbsPath({
-      config,
-      kind,
-      spaceId: spaceIdValue,
-      spaceName: spaceNameValue,
-      title: item.title || "untitled",
-      hasChild,
-      pathSegments: (item.extras?.path_segments as string[] | undefined) ?? null,
-    });
 
     fs.mkdirSync(path.dirname(absPath), { recursive: true });
     const md = writeFrontmatterBody(
@@ -586,6 +679,7 @@ export class LarkSyncer implements PlatformSyncer {
   }
 
   async writeUpdate(item: CloudItem, existing: LocalEntry, config: LoadedConfig) {
+    existing = await this.migrateLegacyManagedPath(item, existing, config);
     const kind = (item.extras?.kind as string) ?? "wiki-node";
     if (kind === "space-index") {
       // We deliberately never overwrite a hand-edited space index.
@@ -596,16 +690,82 @@ export class LarkSyncer implements PlatformSyncer {
       return { relPath: path.relative(config.root, existing.absPath) };
     }
     const preserved = await this.readExistingInonId(existing.absPath);
-    // For updates we MUST write to the existing path so we don't create a
-    // duplicate alongside (e.g. `To Mum.md` next to the canonical
-    // `To-Mum.md`). We override the title → path mapping by computing
-    // the body + frontmatter here, then writing to `existing.absPath`
-    // directly.
-    let fm: LarkOkfFields;
-    let body = "";
+    // Updates always target the existing Markdown path so user moves are
+    // preserved and sidecar assets stay adjacent to the canonical file.
+    const { frontmatter: fm, body } = await this.renderItem(item, existing.absPath);
+    if (preserved) fm.inon_id = preserved;
 
+    const md = writeFrontmatterBody(
+      fm as unknown as Record<string, unknown>,
+      body,
+    );
+    fs.writeFileSync(existing.absPath, md, "utf8");
+    return { relPath: path.relative(config.root, existing.absPath) };
+  }
+
+  private resolveItemAbsPath(item: CloudItem, config: LoadedConfig): string {
+    const kind = (item.extras?.kind as string) ?? "wiki-node";
+    return this.resolveNodeAbsPath({
+      config,
+      kind,
+      spaceId:
+        kind === "minute" ? null : ((item.extras?.space_id as string | undefined) ?? null),
+      spaceName:
+        kind === "minute" ? null : ((item.extras?.space_name as string | undefined) ?? null),
+      title: item.title || "untitled",
+      hasChild: Boolean(item.extras?.has_child),
+      pathSegments: (item.extras?.path_segments as string[] | undefined) ?? null,
+      ownerName: (item.extras?.owner_name as string | undefined) ?? null,
+      isSpaceRoot: Boolean(item.extras?.is_space_root),
+    });
+  }
+
+  /** One-time migration from the superseded type-based layout. */
+  private async migrateLegacyManagedPath(
+    item: CloudItem,
+    existing: LocalEntry,
+    config: LoadedConfig,
+  ): Promise<LocalEntry> {
+    const rel = existing.relPath.split(path.sep).join("/");
+    const legacy = rel.startsWith("Wiki/lark/drive/") || rel.startsWith("Wiki/lark/my-library/");
+    if (!legacy) return existing;
+
+    const kind = (item.extras?.kind as string) ?? "wiki-node";
+    const desired = kind === "space-index"
+      ? this.resolveSpaceIndexAbsPath(item, config)
+      : this.resolveItemAbsPath(item, config);
+    if (desired === existing.absPath || fs.existsSync(desired)) return existing;
+
+    fs.mkdirSync(path.dirname(desired), { recursive: true });
+    await fs.promises.rename(existing.absPath, desired);
+
+    const oldAssets = path.join(
+      path.dirname(existing.absPath),
+      `${path.basename(existing.absPath, ".md")}.assets`,
+    );
+    const newAssets = path.join(
+      path.dirname(desired),
+      `${path.basename(desired, ".md")}.assets`,
+    );
+    if (fs.existsSync(oldAssets) && !fs.existsSync(newAssets)) {
+      await fs.promises.rename(oldAssets, newAssets);
+    }
+
+    return {
+      ...existing,
+      absPath: desired,
+      relPath: path.relative(config.root, desired),
+    };
+  }
+
+  /** Shared body/frontmatter pipeline for both create and update paths. */
+  private async renderItem(
+    item: CloudItem,
+    markdownPath: string,
+  ): Promise<{ frontmatter: LarkOkfFields; body: string }> {
+    const kind = (item.extras?.kind as string) ?? "wiki-node";
     if (kind === "minute") {
-      fm = buildMinuteFrontmatter({
+      const frontmatter = buildMinuteFrontmatter({
         item: {
           token: item.uuid,
           title: item.title,
@@ -618,27 +778,23 @@ export class LarkSyncer implements PlatformSyncer {
         () => this.api.getMinuteDetail(item.uuid),
         `minutes detail ${item.uuid}`,
       );
-      body = renderMinuteBody(detail, fm.title, item.url);
-      if (detail) {
-        if (detail.duration) fm.lark_duration_ms = detail.duration;
-        if (detail.create_time) fm.created_time = millisToIso(detail.create_time);
-        if (detail.create_time) fm.last_edited_time = millisToIso(detail.create_time);
-        if (detail.create_time) fm.timestamp = millisToIso(detail.create_time);
-        if (detail.note_id) fm.lark_note_id = detail.note_id;
-        if (Array.isArray(detail.keywords) && detail.keywords.length > 0) {
-          fm.lark_keywords = detail.keywords.join(", ");
-        }
-      }
-    } else {
-      const objToken =
-        (item.extras?.obj_token as string | undefined) ?? item.uuid;
-      const objType =
-        (item.extras?.obj_type as string | undefined) ?? "docx";
-      const spaceId =
-        (item.extras?.space_id as string | undefined) ?? null;
+      if (detail) stampMinuteMetadata(frontmatter, detail);
+      return {
+        frontmatter,
+        body: renderMinuteBody(detail, frontmatter.title, item.url),
+      };
+    }
 
+    const objToken = (item.extras?.obj_token as string | undefined) ?? item.uuid;
+    const objType = (item.extras?.obj_type as string | undefined) ?? "docx";
+    let frontmatter: LarkOkfFields;
+
+    if (kind === "drive-item") {
+      frontmatter = buildDriveItemFrontmatter(item, objToken, objType);
+    } else {
+      const spaceId = (item.extras?.space_id as string | undefined) ?? null;
       const nodeMeta = await safeRetrieve(
-        () => this.api.getWikiNode(objToken, objType),
+        () => this.getWikiNodeCached(objToken, objType),
         `wiki +node-get ${objToken}`,
       );
       const merged: WikiNode = {
@@ -654,25 +810,154 @@ export class LarkSyncer implements PlatformSyncer {
         node_create_time: nodeMeta?.node_create_time,
         updated_at: nodeMeta?.updated_at,
       };
-      fm = buildWikiNodeFrontmatter({
+      frontmatter = buildWikiNodeFrontmatter({
         node: merged,
+        url: item.url,
         spaceName: (item.extras?.space_name as string | undefined) ?? null,
       });
+      const ownerName = item.extras?.owner_name;
+      if (typeof ownerName === "string" && ownerName) frontmatter.author = ownerName;
+    }
+
+    const body = await this.fetchObjectBody(item, frontmatter, markdownPath, objToken, objType);
+    return { frontmatter, body };
+  }
+
+  /** Fetch readable content or preserve a faithful sidecar snapshot. */
+  private async fetchObjectBody(
+    item: CloudItem,
+    frontmatter: LarkOkfFields,
+    markdownPath: string,
+    objToken: string,
+    objType: string,
+  ): Promise<string> {
+    if (objType === "docx") {
       const fetched = await safeRetrieve(
         () => this.api.fetchDocMarkdown(objToken),
         `docs +fetch ${objToken}`,
       );
-      body = fetched && fetched.trim() ? `${fetched}\n` : `# ${fm.title}\n\n（暂无正文）\n`;
+      return fetched && fetched.trim()
+        ? `${fetched}\n`
+        : renderUnavailableBody(frontmatter.title, item.url, objType);
     }
 
-    if (preserved) fm.inon_id = preserved;
+    if (objType === "mindnote") {
+      const nodes = await safeRetrieve(
+        () => this.api.listMindnoteNodes(objToken),
+        `mindnotes nodes list ${objToken}`,
+      );
+      return nodes
+        ? renderMindnoteBody(frontmatter.title, item.url, nodes)
+        : renderUnavailableBody(frontmatter.title, item.url, objType);
+    }
 
-    const md = writeFrontmatterBody(
-      fm as unknown as Record<string, unknown>,
-      body,
+    if (objType === "bitable") {
+      const markdown = await safeRetrieve(
+        () => this.api.fetchBaseMarkdown(objToken),
+        `base records ${objToken}`,
+      );
+      const snapshot = await this.saveExportSnapshot(
+        markdownPath,
+        frontmatter.title,
+        objToken,
+        "bitable",
+        "base",
+      );
+      return renderSnapshotBody(frontmatter.title, item.url, objType, snapshot, markdown);
+    }
+
+    if (objType === "sheet") {
+      const snapshot = await this.saveExportSnapshot(
+        markdownPath,
+        frontmatter.title,
+        objToken,
+        "sheet",
+        "xlsx",
+      );
+      return renderSnapshotBody(frontmatter.title, item.url, objType, snapshot);
+    }
+
+    if (objType === "slides") {
+      const snapshot = await this.saveExportSnapshot(
+        markdownPath,
+        frontmatter.title,
+        objToken,
+        "slides",
+        "pptx",
+      );
+      return renderSnapshotBody(frontmatter.title, item.url, objType, snapshot);
+    }
+
+    if (objType === "doc") {
+      const snapshot = await this.saveExportSnapshot(
+        markdownPath,
+        frontmatter.title,
+        objToken,
+        "doc",
+        "markdown",
+      );
+      let content: string | null = null;
+      if (snapshot?.absPath) {
+        content = await safeRetrieve(
+          () => fs.promises.readFile(snapshot.absPath, "utf8"),
+          `read exported markdown ${objToken}`,
+        );
+      }
+      return content?.trim()
+        ? `${content}\n`
+        : renderSnapshotBody(frontmatter.title, item.url, objType, snapshot);
+    }
+
+    if (objType === "file") {
+      const ext = inferFileExtension(item.title, item.extras?.file_extension);
+      const artifact = this.resolveArtifactPath(markdownPath, item.title, ext);
+      fs.mkdirSync(path.dirname(artifact.absPath), { recursive: true });
+      const downloaded = await safeRetrieve(
+        () => this.api.downloadFile(objToken, artifact.absPath),
+        `drive +download ${objToken}`,
+      );
+      return renderSnapshotBody(
+        frontmatter.title,
+        item.url,
+        objType,
+        downloaded === null ? null : artifact,
+      );
+    }
+
+    return renderUnavailableBody(frontmatter.title, item.url, objType);
+  }
+
+  private async saveExportSnapshot(
+    markdownPath: string,
+    title: string,
+    token: string,
+    docType: "doc" | "sheet" | "bitable" | "slides",
+    extension: "markdown" | "xlsx" | "base" | "pptx",
+  ): Promise<{ absPath: string; relPath: string } | null> {
+    const artifact = this.resolveArtifactPath(markdownPath, title, extension);
+    fs.mkdirSync(path.dirname(artifact.absPath), { recursive: true });
+    const exported = await safeRetrieve(
+      () => this.api.exportDocument({ token, docType, extension, outputPath: artifact.absPath }),
+      `drive +export ${token}`,
     );
-    fs.writeFileSync(existing.absPath, md, "utf8");
-    return { relPath: path.relative(config.root, existing.absPath) };
+    return exported === null || !fs.existsSync(artifact.absPath) ? null : artifact;
+  }
+
+  private resolveArtifactPath(
+    markdownPath: string,
+    title: string,
+    extension: string,
+  ): { absPath: string; relPath: string } {
+    const mdBase = path.basename(markdownPath, ".md");
+    const assetDir = path.join(path.dirname(markdownPath), `${mdBase}.assets`);
+    const safeTitle = sanitizeFileName(title);
+    const wantedExt = `.${extension.replace(/^\./, "")}`;
+    const fileName = safeTitle.toLowerCase().endsWith(wantedExt.toLowerCase())
+      ? safeTitle
+      : `${safeTitle}${wantedExt}`;
+    const absPath = path.join(assetDir, fileName);
+    const relPath = path.relative(path.dirname(markdownPath), absPath).split(path.sep).join("/");
+    return { absPath, relPath };
   }
 
   /**
@@ -691,14 +976,8 @@ export class LarkSyncer implements PlatformSyncer {
   ): Promise<{ relPath: string }> {
     const spaceId = item.extras?.space_id as string;
     const spaceName = (item.extras?.space_name as string | null) ?? item.title;
-    const topSubdir = resolveTopSubdir(spaceId, spaceName);
-    const absPath = path.join(
-      config.root,
-      "Wiki",
-      "lark",
-      ...topSubdir,
-      "index.md",
-    );
+    const ownerName = (item.extras?.owner_name as string | null) ?? null;
+    const absPath = this.resolveSpaceIndexAbsPath(item, config);
     fs.mkdirSync(path.dirname(absPath), { recursive: true });
 
     // Read existing index.md if present (user may have hand-edited
@@ -714,7 +993,7 @@ export class LarkSyncer implements PlatformSyncer {
       last_edited_time: "",
       lark_id: `space:${spaceId}`,
       lark_space_id: spaceId,
-      author: "",
+      author: ownerName ?? "",
       tags: ["Lark", `lark/wiki/${spaceName.toLowerCase().replace(/\s+/g, "-")}`],
     };
 
@@ -732,11 +1011,24 @@ export class LarkSyncer implements PlatformSyncer {
     return { relPath: path.relative(config.root, absPath) };
   }
 
+  private resolveSpaceIndexAbsPath(item: CloudItem, config: LoadedConfig): string {
+    const spaceId = (item.extras?.space_id as string | null) ?? null;
+    const spaceName = (item.extras?.space_name as string | null) ?? item.title;
+    const ownerName = (item.extras?.owner_name as string | null) ?? null;
+    return path.join(
+      config.root,
+      "Wiki",
+      "lark",
+      ...resolveTopSubdir(spaceId, spaceName, ownerName),
+      "index.md",
+    );
+  }
+
   /**
    * Compute the absolute path a node should be written to.
    *
-   * Top-level layout (3 fixed subdirs):
-   *   - `<root>/Wiki/lark/my-library/...` for the personal library
+   * Top-level layout:
+   *   - `<root>/Wiki/lark/personal/<owner>/...` for personal/Drive docs
    *   - `<root>/Wiki/lark/wiki/<space-name>/...` for team wiki spaces
    *   - `<root>/Wiki/lark/minutes/...` for minutes
    *
@@ -756,8 +1048,20 @@ export class LarkSyncer implements PlatformSyncer {
     title: string;
     hasChild: boolean;
     pathSegments: string[] | null;
+    ownerName: string | null;
+    isSpaceRoot: boolean;
   }): string {
-    const { config, kind, spaceId, spaceName, title, hasChild, pathSegments } = args;
+    const {
+      config,
+      kind,
+      spaceId,
+      spaceName,
+      title,
+      hasChild,
+      pathSegments,
+      ownerName,
+      isSpaceRoot,
+    } = args;
 
     if (kind === "minute") {
       return path.join(
@@ -769,9 +1073,28 @@ export class LarkSyncer implements PlatformSyncer {
       );
     }
 
+    if (kind === "drive-item") {
+      const tokenSuffix = String(args.pathSegments?.[1] ?? "").slice(0, 8);
+      const stableName = tokenSuffix
+        ? `${sanitizeFileName(title)} [${tokenSuffix}]`
+        : sanitizeFileName(title);
+      return path.join(
+        config.root,
+        "Wiki",
+        "lark",
+        "personal",
+        sanitizeFileName(ownerName || "未知所有者"),
+        `${stableName}.md`,
+      );
+    }
+
     // Top-level subdir for this space: my-library for the personal
     // alias, wiki/<space-name> for team spaces.
-    const topSubdir = resolveTopSubdir(spaceId, spaceName);
+    const topSubdir = resolveTopSubdir(spaceId, spaceName, ownerName);
+
+    if (isSpaceRoot) {
+      return path.join(config.root, "Wiki", "lark", ...topSubdir, "index.md");
+    }
 
     // path_segments from BFS. The last segment is the node's own
     // title (matching its parent's "child" entry).
@@ -828,6 +1151,165 @@ export class LarkSyncer implements PlatformSyncer {
     };
     return { ...config, config: next as typeof config.config };
   }
+}
+
+function normalizeDriveObjectType(raw: string): string {
+  const normalized = raw.trim().toLowerCase();
+  return normalized === "base" ? "bitable" : normalized;
+}
+
+function mostFrequentString(values: string[]): string | null {
+  const counts = new Map<string, number>();
+  let winner: string | null = null;
+  let winnerCount = 0;
+  for (const value of values) {
+    const next = (counts.get(value) ?? 0) + 1;
+    counts.set(value, next);
+    if (next > winnerCount) {
+      winner = value;
+      winnerCount = next;
+    }
+  }
+  return winner;
+}
+
+function decodeSearchHighlight(value: string): string {
+  return value
+    .replace(/<\/?h[b]?>/gi, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .trim();
+}
+
+function buildObjectUrl(objType: string, token: string): string {
+  const prefix: Record<string, string> = {
+    bitable: "base",
+    sheet: "sheets",
+    slides: "slides",
+    file: "file",
+    mindnote: "mindnotes",
+    doc: "doc",
+    docx: "docx",
+  };
+  return `https://feishu.cn/${prefix[objType] ?? objType}/${token}`;
+}
+
+function buildDriveItemFrontmatter(
+  item: CloudItem,
+  objToken: string,
+  objType: string,
+): LarkOkfFields {
+  return {
+    type: "Lark Document",
+    source: "lark",
+    title: item.title || "untitled",
+    resource: item.url,
+    timestamp: item.lastEditedTime,
+    created_time: item.createdTime,
+    last_edited_time: item.lastEditedTime,
+    lark_id: item.uuid,
+    lark_obj_token: objToken,
+    lark_obj_type: objType,
+    lark_space_id: null,
+    lark_parent_type: "drive",
+    lark_parent_id: null,
+    tags: ["Lark", `lark/drive/${objType}`],
+    author: (item.extras?.owner_name as string | undefined) ?? "",
+  };
+}
+
+function stampMinuteMetadata(frontmatter: LarkOkfFields, detail: MinuteDetail): void {
+  if (detail.duration) frontmatter.lark_duration_ms = detail.duration;
+  if (detail.create_time) {
+    const created = millisToIso(detail.create_time);
+    frontmatter.created_time = created;
+    frontmatter.last_edited_time = created;
+    frontmatter.timestamp = created;
+  }
+  if (detail.note_id) frontmatter.lark_note_id = detail.note_id;
+  if (Array.isArray(detail.keywords) && detail.keywords.length > 0) {
+    frontmatter.lark_keywords = detail.keywords.join(", ");
+  }
+}
+
+function renderSnapshotBody(
+  title: string,
+  url: string,
+  objType: string,
+  snapshot?: { relPath: string } | null,
+  markdown?: string | null,
+): string {
+  const parts = [
+    `# ${title}`,
+    `> 飞书 ${objType} · [原页面](${url})`,
+  ];
+  if (snapshot) {
+    parts.push(`> 本地快照：[${path.basename(snapshot.relPath)}](<${snapshot.relPath}>)`);
+  } else {
+    parts.push("> 本地快照未能下载；元数据与原页面链接已保留。");
+  }
+  if (markdown?.trim()) parts.push(markdown.trim());
+  return `${parts.join("\n\n")}\n`;
+}
+
+function renderUnavailableBody(title: string, url: string, objType: string): string {
+  return `# ${title}\n\n> 飞书 ${objType} · [原页面](${url})\n\n` +
+    "该对象已发现并保存元数据，但当前 lark-cli 没有返回可落盘的正文或快照。\n";
+}
+
+function inferFileExtension(title: string, rawExtension: unknown): string {
+  const fromTitle = path.extname(title).replace(/^\./, "");
+  if (fromTitle) return fromTitle;
+  if (typeof rawExtension === "string" && rawExtension.trim()) {
+    return rawExtension.trim().replace(/^\./, "").toLowerCase();
+  }
+  return "bin";
+}
+
+function renderMindnoteBody(title: string, url: string, nodes: MindnoteNode[]): string {
+  const byParent = new Map<string, MindnoteNode[]>();
+  const knownIds = new Set(nodes.map((node) => node.node_id));
+  for (const node of nodes) {
+    const parent = node.parent_id && knownIds.has(node.parent_id) ? node.parent_id : "__root__";
+    const siblings = byParent.get(parent) ?? [];
+    siblings.push(node);
+    byParent.set(parent, siblings);
+  }
+
+  const lines = [`# ${title}`, "", `> 飞书思维笔记 · [原页面](${url})`, ""];
+  const visited = new Set<string>();
+  const render = (parent: string, depth: number): void => {
+    for (const node of byParent.get(parent) ?? []) {
+      if (visited.has(node.node_id)) continue;
+      visited.add(node.node_id);
+      const text = richTextContent(node.texts) || "（无标题节点）";
+      const suffix = node.finish ? " ✅" : "";
+      lines.push(`${"  ".repeat(depth)}- ${text}${suffix}`);
+      const notes = richTextContent(node.notes);
+      if (notes) lines.push(`${"  ".repeat(depth + 1)}> ${notes}`);
+      render(node.node_id, depth + 1);
+    }
+  };
+  render("__root__", 0);
+  for (const node of nodes) {
+    if (!visited.has(node.node_id)) {
+      lines.push(`- ${richTextContent(node.texts) || "（无标题节点）"}`);
+    }
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+function richTextContent(
+  elements: Array<{ element_type?: string; text?: { content?: string } }> | undefined,
+): string {
+  return (elements ?? [])
+    .map((element) => element.text?.content ?? "")
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /**
